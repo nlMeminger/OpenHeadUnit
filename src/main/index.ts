@@ -1,22 +1,19 @@
-// CORRECTED: src/main/index.ts with proper node-carplay imports
-// This version fixes the "CarplayNode is not a constructor" error
-
 import {
   app,
   shell,
   BrowserWindow,
   session,
-  systemPreferences,
   IpcMainEvent,
   ipcMain
 } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { DEFAULT_CONFIG } from 'node-carplay/node'
-// FIX: Use default import instead of named import
-import Carplay from 'node-carplay/node'
+// FIX: Use require for node-carplay module
+const { CarplayNode, DEFAULT_CONFIG } = require('node-carplay/node')
 import { Socket } from './Socket'
 import * as fs from 'fs'
+
+import { ExtraConfig, KeyBindings } from './Globals'
 
 import { ExtraConfig, KeyBindings } from './Globals'
 
@@ -173,8 +170,11 @@ function createWindow(): void {
 
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
-  // Request microphone permission on startup
+  // Request microphone permission on startup (macOS only)
+if (process.platform === 'darwin') {
+  const { systemPreferences } = require('electron')
   systemPreferences.askForMediaAccess('microphone')
+}
 
   // Set COOP/COEP headers for SharedArrayBuffer support
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -199,7 +199,7 @@ app.whenReady().then(() => {
     
     try {
       // FIX: Use Carplay (default import) instead of CarplayNode
-      carplay = new Carplay(config)
+carplay = new CarplayNode(config)
       console.log('CarPlay instance created successfully')
 
       // Start CarPlay connection
