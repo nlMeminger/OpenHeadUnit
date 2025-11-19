@@ -2,7 +2,6 @@
 const electron = require("electron");
 const path = require("path");
 const utils = require("@electron-toolkit/utils");
-const Carplay = require("node-carplay/node");
 const socket_io = require("socket.io");
 const events = require("events");
 const fs = require("fs");
@@ -57,11 +56,12 @@ class Socket extends events.EventEmitter {
     this.io.emit("lights", lights);
   }
 }
+const { Carplay, DEFAULT_CONFIG } = require("node-carplay/node");
 let mainWindow;
 let carplay = null;
 const appPath = electron.app.getPath("userData");
 const configPath = appPath + "/config.json";
-console.log(configPath);
+console.log("Config path:", configPath);
 let config;
 const DEFAULT_BINDINGS = {
   left: "ArrowLeft",
@@ -76,7 +76,9 @@ const DEFAULT_BINDINGS = {
   prev: "KeyN"
 };
 const EXTRA_CONFIG = {
-  ...Carplay.DEFAULT_CONFIG,
+  ...DEFAULT_CONFIG,
+  dongleMode: true,
+  // CRITICAL: This must be true for Carlinkit dongles
   kiosk: false,
   camera: "",
   microphone: "",
@@ -86,36 +88,50 @@ const EXTRA_CONFIG = {
   most: {},
   canConfig: {}
 };
-fs__namespace.exists(configPath, (exists) => {
-  if (exists) {
-    config = JSON.parse(fs__namespace.readFileSync(configPath).toString());
-    const configKeys = JSON.stringify(Object.keys({ ...config }).sort());
-    const defaultKeys = JSON.stringify(Object.keys({ ...EXTRA_CONFIG }).sort());
-    if (configKeys !== defaultKeys) {
-      console.log("config updating");
-      config = { ...EXTRA_CONFIG, ...config };
-      console.log("new config", config);
-      fs__namespace.writeFileSync(configPath, JSON.stringify(config));
+const saveSettings = (settings) => {
+  console.log("Saving settings:", settings);
+  fs__namespace.writeFileSync(configPath, JSON.stringify(settings, null, 2));
+  electron.app.relaunch();
+  electron.app.exit();
+};
+function loadConfig() {
+  try {
+    if (fs__namespace.existsSync(configPath)) {
+      const loadedConfig = JSON.parse(fs__namespace.readFileSync(configPath, "utf-8"));
+      const configKeys = JSON.stringify(Object.keys({ ...loadedConfig }).sort());
+      const defaultKeys = JSON.stringify(Object.keys({ ...EXTRA_CONFIG }).sort());
+      if (configKeys !== defaultKeys) {
+        console.log("Config schema mismatch, updating...");
+        const mergedConfig = { ...EXTRA_CONFIG, ...loadedConfig };
+        fs__namespace.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
+        return mergedConfig;
+      }
+      console.log("Config loaded successfully");
+      return loadedConfig;
+    } else {
+      console.log("No config found, creating default config");
+      fs__namespace.writeFileSync(configPath, JSON.stringify(EXTRA_CONFIG, null, 2));
+      return EXTRA_CONFIG;
     }
-    console.log("config read");
-  } else {
-    fs__namespace.writeFileSync(configPath, JSON.stringify(EXTRA_CONFIG));
-    config = JSON.parse(fs__namespace.readFileSync(configPath).toString());
-    console.log("config created and read");
+  } catch (error) {
+    console.error("Error loading config:", error);
+    return EXTRA_CONFIG;
   }
-  new Socket(config, saveSettings);
-});
+}
+config = loadConfig();
+console.log("Loaded config:", JSON.stringify(config, null, 2));
+new Socket(config, saveSettings);
 const handleSettingsReq = () => {
-  console.log("settings request");
+  console.log("Settings request received");
   mainWindow?.webContents.send("settings", config);
 };
 electron.app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
-electron.app.commandLine.appendSwitch("disable-webusb-security", "true");
-console.log(electron.app.commandLine.hasSwitch("disable-webusb-security"));
+electron.app.commandLine.appendSwitch("enable-experimental-web-platform-features");
 function createWindow() {
   mainWindow = new electron.BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1280,
+    // CarPlay typically uses 1280x720 or 800x480
+    height: 720,
     kiosk: false,
     show: false,
     frame: false,
@@ -128,23 +144,37 @@ function createWindow() {
       webSecurity: false
     }
   });
-  electron.app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
-  mainWindow.webContents.session.setPermissionCheckHandler(() => {
-    return true;
-  });
+  mainWindow.webContents.session.setPermissionCheckHandler(() => true);
   mainWindow.webContents.session.setDevicePermissionHandler((details) => {
+    console.log("USB device permission request:", details.device);
     if (details.device.vendorId === 4884) {
+      console.log("Carlinkit dongle detected, granting permission");
       return true;
-    } else {
-      return false;
     }
+    if (details.device.vendorId === 1452) {
+      console.log("Apple device detected, granting permission");
+      return true;
+    }
+    return false;
   });
   mainWindow.webContents.session.on("select-usb-device", (event, details, callback) => {
     event.preventDefault();
-    const selectedDevice = details.deviceList.find((device) => {
-      return device.vendorId === 4884 && (device.productId === 5408 || device.productId === 5409);
-    });
-    callback(selectedDevice?.deviceId);
+    console.log("USB devices available:", details.deviceList);
+    let selectedDevice = details.deviceList.find(
+      (device) => device.vendorId === 4884
+    );
+    if (!selectedDevice) {
+      selectedDevice = details.deviceList.find(
+        (device) => device.vendorId === 1452 && (device.productId === 4776 || device.productId === 4777)
+      );
+    }
+    if (selectedDevice) {
+      console.log("Auto-selecting USB device:", selectedDevice);
+      callback(selectedDevice.deviceId);
+    } else {
+      console.log("No CarPlay-compatible device found");
+      callback();
+    }
   });
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
@@ -154,62 +184,59 @@ function createWindow() {
     return { action: "deny" };
   });
   if (utils.is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"] + "/carplay-renderer.html");
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+    mainWindow.loadFile(path.join(__dirname, "../renderer/carplay-renderer.html"));
   }
-  electron.app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
-  electron.systemPreferences.askForMediaAccess("microphone");
+  if (process.platform === "darwin") {
+    const { systemPreferences } = require("electron");
+    systemPreferences.askForMediaAccess("microphone");
+  }
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     details.responseHeaders["Cross-Origin-Opener-Policy"] = ["same-origin"];
     details.responseHeaders["Cross-Origin-Embedder-Policy"] = ["require-corp"];
     callback({ responseHeaders: details.responseHeaders });
   });
 }
-electron.app.commandLine.appendSwitch("enable-experimental-web-platform-features");
-electron.app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 electron.app.whenReady().then(() => {
   utils.electronApp.setAppUserModelId("com.electron");
-  if (config) {
-    console.log("Initializing CarPlay with config:", config);
-    try {
-      carplay = new Carplay(config);
-      console.log("CarPlay instance created successfully");
-      carplay.start();
-      console.log("CarPlay started");
-      carplay.onmessage = (message) => {
-        console.log("CarPlay message received:", message.type);
-        switch (message.type) {
-          case "audio":
-            mainWindow?.webContents.send("audioData", message.message);
-            break;
-          case "frame":
-            mainWindow?.webContents.send("videoFrame", message.message);
-            break;
-          case "media":
-            mainWindow?.webContents.send("mediaEvent", message.message);
-            break;
-          case "plugged":
-            console.log("CarPlay device plugged in");
-            mainWindow?.webContents.send("carplayStatus", { connected: true });
-            break;
-          case "unplugged":
-            console.log("CarPlay device unplugged");
-            mainWindow?.webContents.send("carplayStatus", { connected: false });
-            break;
-          default:
-            console.log("Unhandled CarPlay message type:", message.type);
-        }
-      };
-      carplay.onerror = (error) => {
-        console.error("CarPlay error:", error);
-        mainWindow?.webContents.send("carplayError", error);
-      };
-    } catch (error) {
-      console.error("Failed to initialize CarPlay:", error);
-    }
-  } else {
-    console.warn("Config not loaded yet, CarPlay not initialized");
+  console.log("Initializing CarPlay...");
+  console.log("Config dongleMode:", config?.dongleMode);
+  try {
+    carplay = new Carplay(config);
+    console.log("✓ CarPlay instance created successfully");
+    carplay.start();
+    console.log("✓ CarPlay started, waiting for device connection...");
+    carplay.onmessage = (message) => {
+      console.log("CarPlay message:", message.type);
+      switch (message.type) {
+        case "audio":
+          mainWindow?.webContents.send("audioData", message.message);
+          break;
+        case "frame":
+          mainWindow?.webContents.send("videoFrame", message.message);
+          break;
+        case "media":
+          mainWindow?.webContents.send("mediaEvent", message.message);
+          break;
+        case "plugged":
+          console.log("✓ CarPlay device connected!");
+          mainWindow?.webContents.send("carplayStatus", { connected: true });
+          break;
+        case "unplugged":
+          console.log("✗ CarPlay device disconnected");
+          mainWindow?.webContents.send("carplayStatus", { connected: false });
+          break;
+        default:
+          console.log("Unhandled message type:", message.type);
+      }
+    };
+    carplay.onerror = (error) => {
+      console.error("CarPlay error:", error);
+      mainWindow?.webContents.send("carplayError", error);
+    };
+  } catch (error) {
+    console.error("✗ Failed to initialize CarPlay:", error);
   }
   electron.session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -227,28 +254,19 @@ electron.app.whenReady().then(() => {
   electron.ipcMain.on("quit", quit);
   electron.ipcMain.on("carplay-touch", (_event, touchData) => {
     if (carplay) {
-      console.log("Sending touch to CarPlay:", touchData);
       carplay.sendTouch(touchData.action, touchData.x, touchData.y);
     }
   });
   electron.ipcMain.on("carplay-key", (_event, keyData) => {
     if (carplay) {
-      console.log("Sending key to CarPlay:", keyData.action);
       carplay.sendKey(keyData.action);
     }
   });
   electron.ipcMain.on("carplay-status", () => {
-    if (carplay) {
-      mainWindow?.webContents.send("carplayStatus", {
-        connected: carplay.connected,
-        dongleMode: config?.dongleMode
-      });
-    } else {
-      mainWindow?.webContents.send("carplayStatus", {
-        connected: false,
-        dongleMode: config?.dongleMode
-      });
-    }
+    mainWindow?.webContents.send("carplayStatus", {
+      connected: carplay?.connected || false,
+      dongleMode: config?.dongleMode
+    });
   });
   electron.app.on("browser-window-created", (_, window) => {
     utils.optimizer.watchWindowShortcuts(window);
@@ -258,15 +276,9 @@ electron.app.whenReady().then(() => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-const saveSettings = (settings) => {
-  console.log("saving settings", settings);
-  fs__namespace.writeFileSync(configPath, JSON.stringify(settings));
-  electron.app.relaunch();
-  electron.app.exit();
-};
 const quit = () => {
   if (carplay) {
-    console.log("Stopping CarPlay");
+    console.log("Stopping CarPlay...");
     try {
       carplay.stop();
     } catch (error) {
@@ -278,7 +290,6 @@ const quit = () => {
 };
 electron.app.on("window-all-closed", () => {
   if (carplay) {
-    console.log("Stopping CarPlay on window close");
     try {
       carplay.stop();
     } catch (error) {

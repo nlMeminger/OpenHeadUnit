@@ -8,32 +8,29 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-// FIX: Use require for node-carplay module
-const { CarplayNode, DEFAULT_CONFIG } = require('node-carplay/node')
+// FIXED: Correct import - use Carplay, not CarplayNode
+const { Carplay, DEFAULT_CONFIG } = require('node-carplay/node')
 import { Socket } from './Socket'
 import * as fs from 'fs'
 
 import { ExtraConfig, KeyBindings } from './Globals'
 
-import { ExtraConfig, KeyBindings } from './Globals'
-
-// Define CarplayMessage interface since it might not be exported
+// Define CarplayMessage interface
 interface CarplayMessage {
   type: 'audio' | 'frame' | 'media' | 'plugged' | 'unplugged' | string
   message?: any
 }
 
 let mainWindow: BrowserWindow
-// FIX: Use 'any' type since we don't have proper type definitions
 let carplay: any | null = null
 
-// User data directory path for storing persistent configuration
+// User data directory path
 const appPath: string = app.getPath('userData')
 const configPath: string = appPath + '/config.json'
-console.log(configPath)
+console.log('Config path:', configPath)
 let config: null | ExtraConfig
 
-// Default keyboard mappings for CarPlay controls
+// Default keyboard mappings
 const DEFAULT_BINDINGS: KeyBindings = {
   left: 'ArrowLeft',
   right: 'ArrowRight',
@@ -47,9 +44,10 @@ const DEFAULT_BINDINGS: KeyBindings = {
   prev: 'KeyN'
 }
 
-// Extended configuration merging CarPlay defaults with app-specific settings
+// Extended configuration with proper defaults
 const EXTRA_CONFIG: ExtraConfig = {
   ...DEFAULT_CONFIG,
+  dongleMode: true,  // CRITICAL: This must be true for Carlinkit dongles
   kiosk: false,
   camera: '',
   microphone: '',
@@ -62,52 +60,65 @@ const EXTRA_CONFIG: ExtraConfig = {
 
 let socket: null | Socket
 
-// Load or create configuration file on startup
-fs.exists(configPath, (exists) => {
-  if (exists) {
-    // Read existing configuration
-    config = JSON.parse(fs.readFileSync(configPath).toString())
+// FIXED: Declare saveSettings BEFORE it's used
+const saveSettings = (settings: ExtraConfig): void => {
+  console.log('Saving settings:', settings)
+  fs.writeFileSync(configPath, JSON.stringify(settings, null, 2))
+  app.relaunch()
+  app.exit()
+}
 
-    // Validate config structure matches current schema
-    const configKeys = JSON.stringify(Object.keys({ ...config }).sort())
-    const defaultKeys = JSON.stringify(Object.keys({ ...EXTRA_CONFIG }).sort())
-
-    // Merge missing keys from default config if schema has changed
-    if (configKeys !== defaultKeys) {
-      console.log('config updating')
-      config = { ...EXTRA_CONFIG, ...config }
-      console.log('new config', config)
-      fs.writeFileSync(configPath, JSON.stringify(config))
+// FIXED: Load config synchronously
+function loadConfig(): ExtraConfig {
+  try {
+    if (fs.existsSync(configPath)) {
+      const loadedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+      
+      // Validate and merge with defaults
+      const configKeys = JSON.stringify(Object.keys({ ...loadedConfig }).sort())
+      const defaultKeys = JSON.stringify(Object.keys({ ...EXTRA_CONFIG }).sort())
+      
+      if (configKeys !== defaultKeys) {
+        console.log('Config schema mismatch, updating...')
+        const mergedConfig = { ...EXTRA_CONFIG, ...loadedConfig }
+        fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2))
+        return mergedConfig
+      }
+      
+      console.log('Config loaded successfully')
+      return loadedConfig
+    } else {
+      console.log('No config found, creating default config')
+      fs.writeFileSync(configPath, JSON.stringify(EXTRA_CONFIG, null, 2))
+      return EXTRA_CONFIG
     }
-    console.log('config read')
-  } else {
-    // Create default configuration file if none exists
-    fs.writeFileSync(configPath, JSON.stringify(EXTRA_CONFIG))
-    config = JSON.parse(fs.readFileSync(configPath).toString())
-    console.log('config created and read')
+  } catch (error) {
+    console.error('Error loading config:', error)
+    return EXTRA_CONFIG
   }
+}
 
-  // Initialize WebSocket server with loaded configuration
-  socket = new Socket(config!, saveSettings)
-})
+// Load config immediately at startup
+config = loadConfig()
+console.log('Loaded config:', JSON.stringify(config, null, 2))
 
-// Handle settings request from renderer process
+// Initialize Socket after config is loaded AND saveSettings is declared
+socket = new Socket(config, saveSettings)
+
+// Handle settings request
 const handleSettingsReq = (): void => {
-  console.log('settings request')
+  console.log('Settings request received')
   mainWindow?.webContents.send('settings', config)
 }
 
-// Enable autoplay for audio/video without user gesture requirement
+// Enable autoplay and WebUSB
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-// Disable WebUSB security for CarPlay device access
-app.commandLine.appendSwitch('disable-webusb-security', 'true')
-console.log(app.commandLine.hasSwitch('disable-webusb-security'))
+app.commandLine.appendSwitch('enable-experimental-web-platform-features')
 
 function createWindow(): void {
-  // Create main application window
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1280,  // CarPlay typically uses 1280x720 or 800x480
+    height: 720,
     kiosk: false,
     show: false,
     frame: false,
@@ -121,62 +132,80 @@ function createWindow(): void {
     }
   })
 
-  app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+  // Grant all permission requests
+  mainWindow.webContents.session.setPermissionCheckHandler(() => true)
 
-  // Grant all permission requests (for media devices)
-  mainWindow.webContents.session.setPermissionCheckHandler(() => {
-    return true
+  // CRITICAL: Update USB device permissions for Carlinkit dongles
+  // Carlinkit vendor ID is 0x1314 (4884 decimal)
+  // Product IDs: 0x1520-0x1529 for different Carlinkit models
+  mainWindow.webContents.session.setDevicePermissionHandler((details) => {
+    console.log('USB device permission request:', details.device)
+    
+    // Allow Carlinkit dongles (vendor ID 0x1314)
+    if (details.device.vendorId === 0x1314) {
+      console.log('Carlinkit dongle detected, granting permission')
+      return true
+    }
+    
+    // Also allow Apple devices for direct CarPlay (vendor ID 0x05AC = 1452 decimal)
+    if (details.device.vendorId === 0x05AC) {
+      console.log('Apple device detected, granting permission')
+      return true
+    }
+    
+    return false
   })
 
-  // Filter USB device access to Apple devices only (CarPlay)
-  // Vendor ID 4884 = Apple Inc.
-  mainWindow.webContents.session.setDevicePermissionHandler((details) => {
-    if (details.device.vendorId === 4884) {
-      return true
+  // Auto-select USB devices
+  mainWindow.webContents.session.on('select-usb-device', (event, details, callback) => {
+    event.preventDefault()
+    console.log('USB devices available:', details.deviceList)
+    
+    // First try to find Carlinkit dongle
+    let selectedDevice = details.deviceList.find((device) => 
+      device.vendorId === 0x1314
+    )
+    
+    // If no Carlinkit, look for Apple device
+    if (!selectedDevice) {
+      selectedDevice = details.deviceList.find((device) => 
+        device.vendorId === 0x05AC && 
+        (device.productId === 0x12A8 || device.productId === 0x12A9)
+      )
+    }
+    
+    if (selectedDevice) {
+      console.log('Auto-selecting USB device:', selectedDevice)
+      callback(selectedDevice.deviceId)
     } else {
-      return false
+      console.log('No CarPlay-compatible device found')
+      callback()
     }
   })
 
-  // Auto-select CarPlay USB device when detected
-  // Product IDs 5408/5409 are CarPlay-capable iOS devices
-  mainWindow.webContents.session.on('select-usb-device', (event, details, callback) => {
-    event.preventDefault()
-    const selectedDevice = details.deviceList.find((device) => {
-      return device.vendorId === 4884 && (device.productId === 5408 || device.productId === 5409)
-    })
-
-    callback(selectedDevice?.deviceId)
-  })
-
-  // Display window once content is loaded
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
-  // Open external links in system browser instead of app
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  // Load renderer - use carplay-renderer.html
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] + '/carplay-renderer.html')
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/carplay-renderer.html'))
   }
 
-  app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+  // Request microphone permission on macOS
+  if (process.platform === 'darwin') {
+    const { systemPreferences } = require('electron')
+    systemPreferences.askForMediaAccess('microphone')
+  }
 
-  // Request microphone permission on startup (macOS only)
-if (process.platform === 'darwin') {
-  const { systemPreferences } = require('electron')
-  systemPreferences.askForMediaAccess('microphone')
-}
-
-  // Set COOP/COEP headers for SharedArrayBuffer support
+  // Set COOP/COEP headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     details.responseHeaders!['Cross-Origin-Opener-Policy'] = ['same-origin']
     details.responseHeaders!['Cross-Origin-Embedder-Policy'] = ['require-corp']
@@ -184,79 +213,66 @@ if (process.platform === 'darwin') {
   })
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-app.commandLine.appendSwitch('enable-experimental-web-platform-features')
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-
+// App ready handler
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
   // ============= CARPLAY INITIALIZATION =============
-  if (config) {
-    console.log('Initializing CarPlay with config:', config)
-    
-    try {
-      // FIX: Use Carplay (default import) instead of CarplayNode
-carplay = new CarplayNode(config)
-      console.log('CarPlay instance created successfully')
+  console.log('Initializing CarPlay...')
+  console.log('Config dongleMode:', config?.dongleMode)
+  
+  try {
+    // FIXED: Use correct class name 'Carplay'
+    carplay = new Carplay(config!)
+    console.log('✓ CarPlay instance created successfully')
 
-      // Start CarPlay connection
-      carplay.start()
-      console.log('CarPlay started')
+    // Start CarPlay
+    carplay.start()
+    console.log('✓ CarPlay started, waiting for device connection...')
 
-      // Handle CarPlay messages
-      carplay.onmessage = (message: CarplayMessage) => {
-        console.log('CarPlay message received:', message.type)
+    // Handle CarPlay messages
+    carplay.onmessage = (message: CarplayMessage) => {
+      console.log('CarPlay message:', message.type)
 
-        switch (message.type) {
-          case 'audio':
-            // Send audio data to renderer process
-            mainWindow?.webContents.send('audioData', message.message)
-            break
+      switch (message.type) {
+        case 'audio':
+          mainWindow?.webContents.send('audioData', message.message)
+          break
 
-          case 'frame':
-            // Send video frame data to renderer
-            mainWindow?.webContents.send('videoFrame', message.message)
-            break
+        case 'frame':
+          mainWindow?.webContents.send('videoFrame', message.message)
+          break
 
-          case 'media':
-            // Handle media control events
-            mainWindow?.webContents.send('mediaEvent', message.message)
-            break
+        case 'media':
+          mainWindow?.webContents.send('mediaEvent', message.message)
+          break
 
-          case 'plugged':
-            // Device connected
-            console.log('CarPlay device plugged in')
-            mainWindow?.webContents.send('carplayStatus', { connected: true })
-            break
+        case 'plugged':
+          console.log('✓ CarPlay device connected!')
+          mainWindow?.webContents.send('carplayStatus', { connected: true })
+          break
 
-          case 'unplugged':
-            // Device disconnected
-            console.log('CarPlay device unplugged')
-            mainWindow?.webContents.send('carplayStatus', { connected: false })
-            break
+        case 'unplugged':
+          console.log('✗ CarPlay device disconnected')
+          mainWindow?.webContents.send('carplayStatus', { connected: false })
+          break
 
-          default:
-            console.log('Unhandled CarPlay message type:', message.type)
-        }
+        default:
+          console.log('Unhandled message type:', message.type)
       }
-
-      // Handle CarPlay errors
-      carplay.onerror = (error: any) => {
-        console.error('CarPlay error:', error)
-        mainWindow?.webContents.send('carplayError', error)
-      }
-    } catch (error) {
-      console.error('Failed to initialize CarPlay:', error)
     }
-  } else {
-    console.warn('Config not loaded yet, CarPlay not initialized')
+
+    // Handle CarPlay errors
+    carplay.onerror = (error: any) => {
+      console.error('CarPlay error:', error)
+      mainWindow?.webContents.send('carplayError', error)
+    }
+  } catch (error) {
+    console.error('✗ Failed to initialize CarPlay:', error)
   }
   // ============= END CARPLAY INITIALIZATION =============
 
-  // Set COOP/COEP headers globally for all requests
+  // Set global COOP/COEP headers
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -267,54 +283,37 @@ carplay = new CarplayNode(config)
     })
   })
 
+  // IPC handlers
   ipcMain.on('getSettings', handleSettingsReq)
-
   ipcMain.on('saveSettings', (_event: IpcMainEvent, settings: ExtraConfig) => {
     saveSettings(settings)
   })
-
   ipcMain.on('quit', quit)
 
-  // ============= CARPLAY IPC HANDLERS =============
-  // Send touch events to CarPlay
+  // CarPlay IPC handlers
   ipcMain.on('carplay-touch', (_event: IpcMainEvent, touchData: {
     x: number,
     y: number,
     action: 'down' | 'move' | 'up'
   }) => {
     if (carplay) {
-      console.log('Sending touch to CarPlay:', touchData)
       carplay.sendTouch(touchData.action, touchData.x, touchData.y)
     }
   })
 
-  // Send keyboard events to CarPlay
-  ipcMain.on('carplay-key', (_event: IpcMainEvent, keyData: {
-    action: string
-  }) => {
+  ipcMain.on('carplay-key', (_event: IpcMainEvent, keyData: { action: string }) => {
     if (carplay) {
-      console.log('Sending key to CarPlay:', keyData.action)
       carplay.sendKey(keyData.action)
     }
   })
 
-  // Request CarPlay status
   ipcMain.on('carplay-status', () => {
-    if (carplay) {
-      mainWindow?.webContents.send('carplayStatus', {
-        connected: carplay.connected,
-        dongleMode: config?.dongleMode
-      })
-    } else {
-      mainWindow?.webContents.send('carplayStatus', {
-        connected: false,
-        dongleMode: config?.dongleMode
-      })
-    }
+    mainWindow?.webContents.send('carplayStatus', {
+      connected: carplay?.connected || false,
+      dongleMode: config?.dongleMode
+    })
   })
-  // ============= END CARPLAY IPC HANDLERS =============
 
-  // Default open or close DevTools by F12 in development
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
@@ -322,24 +321,13 @@ carplay = new CarplayNode(config)
   createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Save settings to disk and restart application to apply changes
-const saveSettings = (settings: ExtraConfig): void => {
-  console.log('saving settings', settings)
-  fs.writeFileSync(configPath, JSON.stringify(settings))
-  app.relaunch()
-  app.exit()
-}
-
-// Handle quit request from renderer process
 const quit = (): void => {
   if (carplay) {
-    console.log('Stopping CarPlay')
+    console.log('Stopping CarPlay...')
     try {
       carplay.stop()
     } catch (error) {
@@ -350,10 +338,8 @@ const quit = (): void => {
   app.quit()
 }
 
-// Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
   if (carplay) {
-    console.log('Stopping CarPlay on window close')
     try {
       carplay.stop()
     } catch (error) {

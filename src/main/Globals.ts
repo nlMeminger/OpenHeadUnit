@@ -39,3 +39,24 @@ export interface CanConfig {
   reverse?: CanMessage,
   lights?: CanMessage
 }
+
+
+export interface ExtraConfig {
+  dongleMode: boolean  
+  fps: number
+  width: number
+  height: number
+  dpi: number
+  nightMode: number
+  hand: string
+  boxName: string
+  wifiCredentials: any
+  kiosk: boolean
+  camera: string
+  microphone: string
+  piMost: boolean
+  canbus: boolean
+  bindings: KeyBindings
+  most: any
+  canConfig: any
+}
