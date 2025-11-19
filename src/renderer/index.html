@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Radio Display</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="time" id="currentTime">12:34 PM</div>
+            <div class="volume-control-main">
+                <span class="volume-icon">🔊</span>
+                <div class="slider-main" id="volumeSliderMain">
+                    <div class="slider-fill-main" style="width: 60%;"></div>
+                    <div class="slider-thumb-main" style="left: 60%;"></div>
+                </div>
+                <span class="volume-value-main">60</span>
+            </div>
+            <div class="status-icons">
+                <span class="status-icon">47&deg;</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Music Screen -->
+            <div class="screen active" id="musicScreen">
+                <div class="album-art">🎵</div>
+                <div class="song-info">
+                    <div class="song-title">Electric Dreams</div>
+                    <div class="song-artist">The Midnight</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="time-labels">
+                        <span>2:15</span>
+                        <span>5:03</span>
+                    </div>
+                </div>
+                <div class="music-controls">
+                    <button class="control-btn">⏮️</button>
+                    <button class="control-btn play" id="playBtn">▶️</button>
+                    <button class="control-btn">⏭️</button>
+                </div>
+            </div>
+
+            <!-- Phone Screen -->
+            <div class="screen" id="phoneScreen">
+                <div class="phone-screen">
+                    <div class="call-status">
+                        <div class="call-type">Incoming Call</div>
+                        <div class="contact-avatar">👤</div>
+                        <div class="contact-name">John Smith</div>
+                        <div class="call-controls">
+                            <button class="call-btn decline">📞</button>
+                            <button class="call-btn accept">📞</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Car Details Screen -->
+            <div class="screen" id="carScreen">
+                <div class="gauges-container">
+                    <div class="gauge">
+                        <div class="gauge-label">Speed</div>
+                        <div class="gauge-value">65 <span class="gauge-unit">mph</span></div>
+                        <div class="gauge-indicator">
+                            <div class="gauge-fill" style="transform: rotate(120deg);"></div>
+                        </div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-label">Fuel</div>
+                        <div class="gauge-value">68 <span class="gauge-unit">%</span></div>
+                        <div class="gauge-indicator">
+                            <div class="gauge-fill" style="transform: rotate(245deg);"></div>
+                        </div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-label">Engine Temp</div>
+                        <div class="gauge-value">195 <span class="gauge-unit">°F</span></div>
+                        <div class="gauge-indicator">
+                            <div class="gauge-fill" style="transform: rotate(180deg);"></div>
+                        </div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-label">Range</div>
+                        <div class="gauge-value">285 <span class="gauge-unit">mi</span></div>
+                        <div class="gauge-indicator">
+                            <div class="gauge-fill" style="transform: rotate(200deg);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Screen -->
+            <div class="screen" id="cameraScreen">
+                <div class="camera-view">
+                    <div class="camera-placeholder">📹</div>
+                    <div class="camera-overlay">
+                        <div class="guideline"></div>
+                        <div class="guideline-h"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Screen -->
+            <div class="screen" id="settingsScreen">
+                <h2 style="margin-bottom: 20px;">Settings</h2>
+                <div class="settings-list">
+                    <div class="setting-item">
+                        <div class="setting-label">🔊 Volume</div>
+                        <div class="slider-container">
+                            <div class="slider" data-slider="volume">
+                                <div class="slider-fill" style="width: 60%;"></div>
+                                <div class="slider-thumb" style="left: 60%;"></div>
+                            </div>
+                            <div class="setting-value">60</div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-label">☀️ Brightness</div>
+                        <div class="slider-container">
+                            <div class="slider" data-slider="brightness">
+                                <div class="slider-fill" style="width: 80%;"></div>
+                                <div class="slider-thumb" style="left: 80%;"></div>
+                            </div>
+                            <div class="setting-value">80</div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-label">🎵 Bass</div>
+                        <div class="slider-container">
+                            <div class="slider" data-slider="bass">
+                                <div class="slider-fill" style="width: 50%;"></div>
+                                <div class="slider-thumb" style="left: 50%;"></div>
+                            </div>
+                            <div class="setting-value">50</div>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-label">🎼 Treble</div>
+                        <div class="slider-container">
+                            <div class="slider" data-slider="treble">
+                                <div class="slider-fill" style="width: 50%;"></div>
+                                <div class="slider-thumb" style="left: 50%;"></div>
+                            </div>
+                            <div class="setting-value">50</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            
+        </div>
+
+        <!-- Navigation Bar -->
+        <div class="nav-bar">
+            <div class="nav-item active" onclick="showScreen('musicScreen', this)">
+                <div class="nav-icon">🎵</div>
+                <div class="nav-label">Music</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('phoneScreen', this)">
+                <div class="nav-icon">📞</div>
+                <div class="nav-label">Phone</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('carScreen', this)">
+                <div class="nav-icon">🚗</div>
+                <div class="nav-label">Car</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('cameraScreen', this)">
+                <div class="nav-icon">📹</div>
+                <div class="nav-label">Camera</div>
+            </div>
+            <div class="nav-item" onclick="showScreen('settingsScreen', this)">
+                <div class="nav-icon">⚙️</div>
+                <div class="nav-label">Settings</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

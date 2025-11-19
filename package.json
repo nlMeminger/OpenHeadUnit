@@ -1,0 +1,30 @@
+{
+  "name": "openheadunit",
+  "version": "0.0.1",
+  "description": "An open source raspberry  pi based head unit for cars",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview"
+  },
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "electron": "^39.2.1",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^4.0.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "electron-toolkit": "^1.0.24",
+    "electron-vite": "^2.3.0",
+    "node-carplay": "^4.1.0",
+    "socket.io": "^4.8.1",
+    "socketcan": "^4.0.7",
+    "socketmost": "^3.0.1-alpha.87",
+    "usb": "^2.16.0"
+  }
+}

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CarPlay Head Unit</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #header {
+      background: #1a1a1a;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #status {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b30;
+    }
+
+    .status-dot.connected {
+      background: #34c759;
+    }
+
+    #carplay-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    #carplay-canvas {
+      max-width: 100%;
+      max-height: 100%;
+      border: 2px solid #333;
+      cursor: pointer;
+      background: #000;
+    }
+
+    #controls {
+      background: #1a1a1a;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      background: #2c2c2e;
+      border: none;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .control-btn:hover {
+      background: #3a3a3c;
+    }
+
+    .control-btn:active {
+      background: #48484a;
+    }
+
+    #keyboard-help {
+      background: #2c2c2e;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 15px;
+      font-size: 12px;
+    }
+
+    #keyboard-help h3 {
+      margin-top: 0;
+      font-size: 14px;
+      color: #0a84ff;
+    }
+
+    .key-mapping {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .key-item {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .key {
+      background: #48484a;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    #message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #8e8e93;
+    }
+
+    #message.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <h1 style="margin: 0; font-size: 20px;">CarPlay Head Unit</h1>
+      <div id="status">
+        <div class="status-indicator">
+          <div class="status-dot" id="carplay-status-dot"></div>
+          <span id="carplay-status-text">Disconnected</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="carplay-container">
+      <canvas id="carplay-canvas" width="800" height="480"></canvas>
+      <div id="message">
+        <h2>Waiting for CarPlay Connection</h2>
+        <p>Connect your iPhone via USB or wireless</p>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button class="control-btn" onclick="sendKey('home')">🏠 Home</button>
+      <button class="control-btn" onclick="sendKey('back')">⬅️ Back</button>
+      <button class="control-btn" onclick="sendKey('play')">▶️ Play</button>
+      <button class="control-btn" onclick="sendKey('pause')">⏸️ Pause</button>
+      <button class="control-btn" onclick="sendKey('next')">⏭️ Next</button>
+      <button class="control-btn" onclick="sendKey('prev')">⏮️ Prev</button>
+    </div>
+
+    <div id="keyboard-help">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="key-mapping">
+        <div class="key-item"><span>Navigate Left:</span> <span class="key">←</span></div>
+        <div class="key-item"><span>Navigate Right:</span> <span class="key">→</span></div>
+        <div class="key-item"><span>Navigate Down:</span> <span class="key">↓</span></div>
+        <div class="key-item"><span>Select:</span> <span class="key">Space</span></div>
+        <div class="key-item"><span>Back:</span> <span class="key">Backspace</span></div>
+        <div class="key-item"><span>Home:</span> <span class="key">H</span></div>
+        <div class="key-item"><span>Play:</span> <span class="key">P</span></div>
+        <div class="key-item"><span>Pause:</span> <span class="key">O</span></div>
+        <div class="key-item"><span>Next Track:</span> <span class="key">M</span></div>
+        <div class="key-item"><span>Prev Track:</span> <span class="key">N</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get canvas and context
+    const canvas = document.getElementById('carplay-canvas')
+    const ctx = canvas.getContext('2d')
+    const message = document.getElementById('message')
+    const statusDot = document.getElementById('carplay-status-dot')
+    const statusText = document.getElementById('carplay-status-text')
+
+    // CarPlay state
+    let isConnected = false
+    let audioContext = null
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('Renderer loaded, requesting CarPlay status')
+      window.api?.carplayStatus()
+      setupCanvasInteraction()
+      setupKeyboardShortcuts()
+    })
+
+    // Setup canvas mouse interaction for touch events
+    function setupCanvasInteraction() {
+      let isMouseDown = false
+
+      canvas.addEventListener('mousedown', (e) => {
+        isMouseDown = true
+        const { x, y } = getCanvasCoordinates(e)
+        window.api?.carplayTouch(x, y, 'down')
+      })
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (isMouseDown) {
+          const { x, y } = getCanvasCoordinates(e)
+          window.api?.carplayTouch(x, y, 'move')
+        }
+      })
+
+      canvas.addEventListener('mouseup', (e) => {
+        if (isMouseDown) {
+          isMouseDown = false
+          const { x, y } = getCanvasCoordinates(e)
+          window.api?.carplayTouch(x, y, 'up')
+        }
+      })
+
+      canvas.addEventListener('mouseleave', (e) => {
+        if (isMouseDown) {
+          isMouseDown = false
+          const { x, y } = getCanvasCoordinates(e)
+          window.api?.carplayTouch(x, y, 'up')
+        }
+      })
+
+      // Touch support for tablets/touchscreens
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault()
+        const touch = e.touches[0]
+        const { x, y } = getCanvasCoordinates(touch)
+        window.api?.carplayTouch(x, y, 'down')
+      })
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault()
+        const touch = e.touches[0]
+        const { x, y } = getCanvasCoordinates(touch)
+        window.api?.carplayTouch(x, y, 'move')
+      })
+
+      canvas.addEventListener('touchend', (e) => {
+        e.preventDefault()
+        const touch = e.changedTouches[0]
+        const { x, y } = getCanvasCoordinates(touch)
+        window.api?.carplayTouch(x, y, 'up')
+      })
+    }
+
+    // Get coordinates relative to canvas
+    function getCanvasCoordinates(event) {
+      const rect = canvas.getBoundingClientRect()
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+      
+      return {
+        x: Math.round((event.clientX - rect.left) * scaleX),
+        y: Math.round((event.clientY - rect.top) * scaleY)
+      }
+    }
+
+    // Setup keyboard shortcuts
+    function setupKeyboardShortcuts() {
+      const keyMap = {
+        'ArrowLeft': 'left',
+        'ArrowRight': 'right',
+        'ArrowDown': 'down',
+        'Space': 'selectDown',
+        'Backspace': 'back',
+        'KeyH': 'home',
+        'KeyP': 'play',
+        'KeyO': 'pause',
+        'KeyM': 'next',
+        'KeyN': 'prev'
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const action = keyMap[e.code]
+        if (action) {
+          e.preventDefault()
+          sendKey(action)
+        }
+      })
+    }
+
+    // Send key command to CarPlay
+    function sendKey(action) {
+      console.log('Sending key:', action)
+      window.api?.carplayKey(action)
+    }
+
+    // Listen for video frames from CarPlay
+    window.api?.onVideoFrame((event, frameData) => {
+      try {
+        // frameData should contain: { data: Buffer, width: number, height: number }
+        const imageData = new ImageData(
+          new Uint8ClampedArray(frameData.data),
+          frameData.width,
+          frameData.height
+        )
+        
+        // Adjust canvas size if needed
+        if (canvas.width !== frameData.width || canvas.height !== frameData.height) {
+          canvas.width = frameData.width
+          canvas.height = frameData.height
+        }
+        
+        ctx.putImageData(imageData, 0, 0)
+        
+        if (message.classList.contains('hidden') === false) {
+          message.classList.add('hidden')
+        }
+      } catch (error) {
+        console.error('Error rendering video frame:', error)
+      }
+    })
+
+    // Listen for audio data from CarPlay
+    window.api?.onAudioData((event, audioData) => {
+      // Audio handling would require additional processing
+      // This is a placeholder - you'll need to implement proper audio decoding
+      console.log('Audio data received, length:', audioData?.length || 0)
+      
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        console.log('Audio context created')
+      }
+      
+      // TODO: Decode and play audio data
+      // This would typically involve:
+      // 1. Decoding the audio buffer
+      // 2. Creating an audio source
+      // 3. Playing it through the Web Audio API
+    })
+
+    // Listen for CarPlay status changes
+    window.api?.onCarplayStatus((event, status) => {
+      console.log('CarPlay status update:', status)
+      isConnected = status.connected
+      
+      if (isConnected) {
+        statusDot.classList.add('connected')
+        statusText.textContent = 'Connected'
+        message.classList.add('hidden')
+      } else {
+        statusDot.classList.remove('connected')
+        statusText.textContent = 'Disconnected'
+        message.classList.remove('hidden')
+        
+        // Clear canvas
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+    })
+
+    // Listen for CarPlay errors
+    window.api?.onCarplayError((event, error) => {
+      console.error('CarPlay error:', error)
+      alert('CarPlay Error: ' + error)
+    })
+
+    // Log when API is not available (for debugging)
+    if (!window.api) {
+      console.error('window.api is not available - preload script may not be loaded correctly')
+    }
+  </script>
+</body>
+</html>
