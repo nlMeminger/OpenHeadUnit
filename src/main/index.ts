@@ -117,8 +117,7 @@ app.commandLine.appendSwitch('enable-experimental-web-platform-features')
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1280,  // CarPlay typically uses 1280x720 or 800x480
-    height: 720,
+
     kiosk: false,
     show: false,
     frame: false,
