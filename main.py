@@ -16,19 +16,15 @@ import numpy as np
 sys.path.insert(0, '/mnt/user-data/uploads')
 
 # Import modular components (will work if files are present)
-try:
-    from video_decoder import VideoDecoder
-    from audio_handler import AudioHandler, AudioFormat
-    from touch_handler import TouchHandler, TouchAction
-    from device_finder import DeviceFinder
-    from stats_tracker import StatsTracker
-    from dongle_driver import DongleDriver, DEFAULT_CONFIG
-    from readable import VideoData, AudioData, Plugged, Unplugged, DECODE_TYPE_MAP
-    from sendable import SendTouch, SendAudio
-    CARPLAY_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: CarPlay modules not available: {e}")
-    CARPLAY_AVAILABLE = False
+from carplay_dongle.video_decoder import VideoDecoder
+from carplay_dongle.audio_handler import AudioHandler, AudioFormat
+from carplay_dongle.touch_handler import TouchHandler, TouchAction
+from carplay_dongle.device_finder import DeviceFinder
+from carplay_dongle.stats_tracker import StatsTracker
+from carplay_dongle.dongle_driver import DongleDriver, DEFAULT_CONFIG
+from carplay_dongle.readable import VideoData, AudioData, Plugged, Unplugged, DECODE_TYPE_MAP
+from carplay_dongle.sendable import SendTouch, SendAudio
+
 
 
 class CarPlayViewer:
@@ -710,14 +706,7 @@ class CarRadioUI:
     
     def launch_carplay(self):
         """Launch CarPlay viewer"""
-        if not CARPLAY_AVAILABLE:
-            print("[Python] CarPlay modules not available!")
-            # Show error dialog
-            self.show_error_dialog(
-                "CarPlay Not Available",
-                "CarPlay modules could not be loaded.\nPlease ensure all required files are present."
-            )
-            return
+
         
         print("[Python] Launching CarPlay...")
         
@@ -905,17 +894,6 @@ def main():
     print("=" * 60)
     print("Car Radio UI with CarPlay Integration")
     print("=" * 60)
-    
-    if CARPLAY_AVAILABLE:
-        print("[✓] CarPlay modules loaded successfully")
-    else:
-        print("[✗] CarPlay modules not available")
-        print("    Place CarPlay driver files in /mnt/user-data/uploads/")
-    
-    print()
-    print("Click the CarPlay tile to launch CarPlay/Android Auto")
-    print("Press Ctrl+C in terminal or use Power button to exit")
-    print()
     
     root.mainloop()
 
