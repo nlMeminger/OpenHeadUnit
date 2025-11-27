@@ -4,10 +4,8 @@ import numpy as np
 from enum import IntEnum
 from typing import Optional, Dict, Any
 
-try:
-    from common import MessageHeader, CommandMapping
-except ImportError:
-    from common import MessageHeader, CommandMapping
+
+from .common import MessageHeader, CommandMapping
 
 
 class AudioCommand(IntEnum):

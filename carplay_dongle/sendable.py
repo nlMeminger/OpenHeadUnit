@@ -4,10 +4,8 @@ import numpy as np
 from enum import IntEnum
 from typing import List, Dict
 
-try:
-    from common import MessageType, MessageHeader, CommandMapping
-except ImportError:
-    from .common import MessageType, MessageHeader, CommandMapping
+
+from .common import MessageType, MessageHeader, CommandMapping
 
 
 def clamp(value: float, min_val: float, max_val: float) -> float:

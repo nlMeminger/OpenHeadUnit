@@ -5,37 +5,20 @@ import time
 from typing import Optional, Dict, Any
 from enum import IntEnum
 
-try:
-    from events import EventEmitter
-    from common import MessageHeader, HeaderBuildError
-    from readable import PhoneType
-    from sendable import (
-        SendableMessage,
-        SendNumber,
-        FileAddress,
-        SendOpen,
-        SendBoolean,
-        SendString,
-        SendBoxSettings,
-        SendCommand,
-        HeartBeat,
-    )
-except ImportError:
-    from .events import EventEmitter
-    from common import MessageHeader, HeaderBuildError
-    from readable import PhoneType
-    from sendable import (
-        SendableMessage,
-        SendNumber,
-        FileAddress,
-        SendOpen,
-        SendBoolean,
-        SendString,
-        SendBoxSettings,
-        SendCommand,
-        HeartBeat,
-    )
-
+from .events import EventEmitter
+from .common import MessageHeader, HeaderBuildError
+from .readable import PhoneType
+from .sendable import (
+    SendableMessage,
+    SendNumber,
+    FileAddress,
+    SendOpen,
+    SendBoolean,
+    SendString,
+    SendBoxSettings,
+    SendCommand,
+    HeartBeat,
+)
 CONFIG_NUMBER = 1
 MAX_ERROR_COUNT = 5
 
