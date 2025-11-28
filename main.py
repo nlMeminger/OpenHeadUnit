@@ -8,16 +8,22 @@ from tkinter import ttk
 from datetime import datetime
 import random
 import sys
-import queue
-from PIL import Image, ImageTk
-import numpy as np
+import os
 
 # Add uploads directory to path for dongle driver imports
-sys.path.insert(0, '/mnt/user-data/uploads')
+if '/mnt/user-data/uploads' not in sys.path:
+    sys.path.insert(0, '/mnt/user-data/uploads')
 
+# Import CarPlay module
+try:
+    from carplay import CarPlayViewer
+    CARPLAY_AVAILABLE = True
+    print("✓ CarPlay module loaded successfully")
+except ImportError as e:
+    print(f"✗ CarPlay module not available: {e}")
+    print("CarPlay functionality will be disabled")
+    CARPLAY_AVAILABLE = False
 
-
-from carplay import CarPlayViewer
 
 class CarRadioUI:
     def __init__(self, root):
@@ -97,6 +103,20 @@ class CarRadioUI:
         )
         self.temp_label.pack()
         
+        # Right side - CarPlay status (if available)
+        if CARPLAY_AVAILABLE:
+            right_frame = tk.Frame(top_frame, bg=self.colors['bg_secondary'])
+            right_frame.pack(side=tk.RIGHT, padx=20, pady=5)
+            
+            self.carplay_status = tk.Label(
+                right_frame,
+                text="🎧 CarPlay Ready",
+                font=("Arial", 10, "bold"),
+                bg=self.colors['bg_secondary'],
+                fg=self.colors['accent_green']
+            )
+            self.carplay_status.pack()
+        
     def create_main_content(self):
         """Create the main grid of application tiles"""
         content_frame = tk.Frame(self.main_frame, bg=self.colors['bg_main'])
@@ -110,26 +130,37 @@ class CarRadioUI:
         
         # App tiles configuration
         apps = [
-            ("🎵", "Music", self.colors['accent_purple'], 0, 0),
-            ("📞", "Phone", self.colors['accent_green'], 0, 1),
-            ("🎧", "CarPlay", self.colors['accent_blue'], 0, 2),
-            ("📹", "Rear Camera", self.colors['accent_orange'], 1, 0),
-            ("🏎️", "Dashboard", self.colors['accent_red'], 1, 1),
-            ("⚙️", "Settings", '#64748b', 1, 2),
+            ("🎵", "Music", self.colors['accent_purple'], 0, 0, True),
+            ("📞", "Phone", self.colors['accent_green'], 0, 1, True),
+            ("🎧", "CarPlay", self.colors['accent_blue'], 0, 2, CARPLAY_AVAILABLE),
+            ("📹", "Rear Camera", self.colors['accent_orange'], 1, 0, True),
+            ("🏎️", "Dashboard", self.colors['accent_red'], 1, 1, True),
+            ("⚙️", "Settings", '#64748b', 1, 2, True),
         ]
         
-        for icon, title, color, row, col in apps:
-            self.create_tile(content_frame, icon, title, color, row, col)
+        for icon, title, color, row, col, enabled in apps:
+            self.create_tile(content_frame, icon, title, color, row, col, enabled)
     
-    def create_tile(self, parent, icon, title, accent_color, row, col):
+    def create_tile(self, parent, icon, title, accent_color, row, col, enabled=True):
         """Create an application tile button"""
+        # Determine tile appearance based on enabled state
+        if not enabled:
+            tile_bg = '#1e293b'  # Darker background for disabled
+            icon_color = '#64748b'  # Gray icon
+            text_color = '#64748b'  # Gray text
+            accent_color = '#64748b'  # Gray border
+        else:
+            tile_bg = self.colors['bg_tile']
+            icon_color = self.colors['text_primary']
+            text_color = self.colors['text_primary']
+        
         # Create frame for tile
         tile_frame = tk.Frame(
             parent,
-            bg=self.colors['bg_tile'],
+            bg=tile_bg,
             highlightbackground=accent_color,
             highlightthickness=1,
-            cursor="hand2"
+            cursor="hand2" if enabled else "arrow"
         )
         tile_frame.grid(row=row, column=col, padx=7, pady=7, sticky="nsew")
         
@@ -138,8 +169,8 @@ class CarRadioUI:
             tile_frame,
             text=icon,
             font=("Arial", 48),
-            bg=self.colors['bg_tile'],
-            fg=self.colors['text_primary']
+            bg=tile_bg,
+            fg=icon_color
         )
         icon_label.pack(expand=True, pady=(20, 5))
         
@@ -148,16 +179,28 @@ class CarRadioUI:
             tile_frame,
             text=title,
             font=("Arial", 14, "bold"),
-            bg=self.colors['bg_tile'],
-            fg=self.colors['text_primary']
+            bg=tile_bg,
+            fg=text_color
         )
         title_label.pack(expand=True, pady=(0, 20))
         
-        # Bind click events
-        for widget in [tile_frame, icon_label, title_label]:
-            widget.bind("<Button-1>", lambda e, t=title: self.open_app(t))
-            widget.bind("<Enter>", lambda e, f=tile_frame, c=accent_color: self.tile_hover(f, c, True))
-            widget.bind("<Leave>", lambda e, f=tile_frame: self.tile_hover(f, None, False))
+        # Add disabled indicator for CarPlay if not available
+        if title == "CarPlay" and not enabled:
+            disabled_label = tk.Label(
+                tile_frame,
+                text="(Unavailable)",
+                font=("Arial", 9),
+                bg=tile_bg,
+                fg='#64748b'
+            )
+            disabled_label.pack(pady=(0, 10))
+        
+        # Bind click events only if enabled
+        if enabled:
+            for widget in [tile_frame, icon_label, title_label]:
+                widget.bind("<Button-1>", lambda e, t=title: self.open_app(t))
+                widget.bind("<Enter>", lambda e, f=tile_frame, c=accent_color: self.tile_hover(f, c, True))
+                widget.bind("<Leave>", lambda e, f=tile_frame: self.tile_hover(f, None, False))
     
     def tile_hover(self, frame, color, hover):
         """Handle tile hover effects"""
@@ -276,7 +319,7 @@ class CarRadioUI:
         volume = int(float(value))
         self.volume = volume
         self.volume_value.config(text=str(volume))
-        print(f"[Python] Setting volume to {volume}")
+        print(f"[Main UI] Setting volume to {volume}")
         # Add actual volume control here (e.g., ALSA commands)
     
     def toggle_brightness(self):
@@ -343,7 +386,7 @@ class CarRadioUI:
         if hasattr(self, 'brightness_value'):
             self.brightness_value.config(text=f"{brightness}%")
         
-        print(f"[Python] Setting brightness to {brightness}%")
+        print(f"[Main UI] Setting brightness to {brightness}%")
         # Add actual brightness control here
     
     def close_brightness_popup(self):
@@ -354,11 +397,17 @@ class CarRadioUI:
     
     def open_app(self, app_name):
         """Handle app opening"""
-        print(f"[Python] Opening {app_name}!")
+        print(f"[Main UI] Opening {app_name}!")
         
-        # Handle CarPlay specially
+        # Handle each app differently
         if app_name == "CarPlay":
-            self.launch_carplay()
+            if CARPLAY_AVAILABLE:
+                self.launch_carplay()
+            else:
+                self.show_error_dialog(
+                    "CarPlay Unavailable",
+                    "CarPlay functionality is not available.\n\nPlease check that all required\nmodules are installed."
+                )
         elif app_name == "Music":
             self.launch_music_player()
         elif app_name == "Phone":
@@ -371,28 +420,40 @@ class CarRadioUI:
             self.open_settings()
     
     def launch_carplay(self):
-        """Launch CarPlay viewer"""
-
+        """Launch CarPlay viewer with full integration"""
+        if not CARPLAY_AVAILABLE:
+            print("[Main UI] CarPlay not available")
+            return
         
-        print("[Python] Launching CarPlay...")
+        print("[Main UI] Launching CarPlay...")
+        
+        # Update CarPlay status
+        if hasattr(self, 'carplay_status'):
+            self.carplay_status.config(text="🎧 Starting...", fg=self.colors['accent_orange'])
         
         # Hide main UI
         self.main_frame.pack_forget()
         self.main_ui_visible = False
         
-        # Create and show CarPlay viewer
+        # Create CarPlay viewer if not exists
         if not self.carplay_viewer:
             self.carplay_viewer = CarPlayViewer(self.root, self.return_to_main)
         
+        # Show CarPlay viewer
         self.carplay_viewer.show()
     
     def return_to_main(self):
         """Return to main UI from CarPlay"""
-        print("[Python] Returning to main UI")
+        print("[Main UI] Returning from CarPlay to main menu")
         
-        # Show main UI
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
-        self.main_ui_visible = True
+        # Show main UI again
+        if not self.main_ui_visible:
+            self.main_frame.pack(fill=tk.BOTH, expand=True)
+            self.main_ui_visible = True
+        
+        # Update CarPlay status
+        if hasattr(self, 'carplay_status'):
+            self.carplay_status.config(text="🎧 CarPlay Ready", fg=self.colors['accent_green'])
     
     def show_error_dialog(self, title, message):
         """Show an error dialog"""
@@ -524,7 +585,7 @@ class CarRadioUI:
     
     def power_off(self):
         """Handle system power off"""
-        print("[Python] Powering off system...")
+        print("[Main UI] Powering off system...")
         
         # Cleanup CarPlay if active
         if self.carplay_viewer:
@@ -536,32 +597,58 @@ class CarRadioUI:
     
     # App launch methods (stub implementations)
     def launch_music_player(self):
-        print("[Python] Launching music player...")
-        # os.system("vlc &")
+        """Launch music player application"""
+        print("[Main UI] Launching music player...")
+        self.show_error_dialog("Coming Soon", "Music player functionality\nwill be available soon!")
+        # Example: os.system("vlc &")
     
     def launch_phone_app(self):
-        print("[Python] Launching phone app...")
+        """Launch phone application"""
+        print("[Main UI] Launching phone app...")
+        self.show_error_dialog("Coming Soon", "Phone functionality\nwill be available soon!")
     
     def launch_camera(self):
-        print("[Python] Showing rear camera...")
-        # os.system("raspivid -t 0 &")
+        """Show rear camera"""
+        print("[Main UI] Showing rear camera...")
+        self.show_error_dialog("Coming Soon", "Rear camera functionality\nwill be available soon!")
+        # Example: os.system("raspivid -t 0 &")
     
     def show_dashboard(self):
-        print("[Python] Showing dashboard...")
+        """Show vehicle dashboard"""
+        print("[Main UI] Showing dashboard...")
+        self.show_error_dialog("Coming Soon", "Dashboard functionality\nwill be available soon!")
     
     def open_settings(self):
-        print("[Python] Opening settings...")
+        """Open settings menu"""
+        print("[Main UI] Opening settings...")
+        self.show_error_dialog("Coming Soon", "Settings menu\nwill be available soon!")
 
 
 def main():
-    root = tk.Tk()
-    app = CarRadioUI(root)
-    
+    """Main entry point"""
     print("=" * 60)
     print("Car Radio UI with CarPlay Integration")
     print("=" * 60)
+    print(f"CarPlay Module Available: {CARPLAY_AVAILABLE}")
     
-    root.mainloop()
+    if CARPLAY_AVAILABLE:
+        print("✓ Full CarPlay functionality enabled")
+    else:
+        print("ℹ CarPlay will show as unavailable")
+    
+    print("=" * 60)
+    print()
+    
+    root = tk.Tk()
+    app = CarRadioUI(root)
+    
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        print("\n[Main UI] Shutting down...")
+        if app.carplay_viewer:
+            app.carplay_viewer.cleanup()
+        root.quit()
 
 
 if __name__ == "__main__":

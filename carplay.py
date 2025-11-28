@@ -242,10 +242,14 @@ class CarPlayViewer:
                     scale_w = canvas_width / image.width
                     scale_h = canvas_height / image.height
                     scale = min(scale_w, scale_h)
+
                     
                     new_width = int(image.width * scale)
                     new_height = int(image.height * scale)
                     
+                    new_width = canvas_width
+                    new_height = canvas_height
+
                     # Resize and display
                     resized_image = image.resize(
                         (new_width, new_height),
