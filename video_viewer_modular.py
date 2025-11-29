@@ -24,16 +24,16 @@ import numpy as np
 sys.path.insert(0, '/mnt/user-data/uploads')
 
 # Import modular components
-from video_decoder import VideoDecoder, FrameSaver
-from audio_handler import AudioHandler, AudioFormat
-from touch_handler import TouchHandler, TouchAction
-from device_finder import DeviceFinder
-from stats_tracker import StatsTracker
+from carplay_dongle.video_decoder import VideoDecoder, FrameSaver
+from carplay_dongle.audio_handler import AudioHandler, AudioFormat
+from carplay_dongle.touch_handler import TouchHandler, TouchAction
+from carplay_dongle.device_finder import DeviceFinder
+from carplay_dongle.stats_tracker import StatsTracker
 
 # Import dongle driver components
-from dongle_driver import DongleDriver, DEFAULT_CONFIG
-from readable import VideoData, AudioData, Plugged, Unplugged, DECODE_TYPE_MAP
-from sendable import SendTouch, SendAudio
+from carplay_dongle.dongle_driver import DongleDriver, DEFAULT_CONFIG
+from carplay_dongle.readable import VideoData, AudioData, Plugged, Unplugged, DECODE_TYPE_MAP
+from carplay_dongle.sendable import SendTouch, SendAudio
 
 
 class ModularVideoViewer:

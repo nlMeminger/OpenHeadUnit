@@ -37,8 +37,8 @@ class DongleConfig:
     def __init__(
         self,
         android_work_mode: Optional[bool] = None,
-        width: int = 800,
-        height: int = 640,
+        width: int = 1280,
+        height: int = 720,
         fps: int = 20,
         dpi: int = 160,
         format: int = 5,

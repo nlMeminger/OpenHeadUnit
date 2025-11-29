@@ -178,6 +178,7 @@ class MessageHeader:
         if not isinstance(self.type, MessageType):
             # Unknown message type (raw int)
             if data:
+                print(self.type)
                 print(f'Skipping unknown message type: 0x{self.type:02x} with {len(data)} bytes of data')
             else:
                 print(f'Skipping unknown message type: 0x{self.type:02x} (no data)')
