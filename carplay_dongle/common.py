@@ -51,6 +51,7 @@ class CommandMapping(IntEnum):
 
 
 class MessageType(IntEnum):
+    requestHostUI = 0x00
     Open = 0x01
     Plugged = 0x02
     Phase = 0x03
@@ -72,7 +73,7 @@ class MessageType(IntEnum):
     HiCarLink = 0x18
     BoxSettings = 0x19
     MediaData = 0x2a
-    Unknown = 0x26  # Added for unknown message type
+    Unknown = 0x26
     SendFile = 0x99
     HeartBeat = 0xaa
     SoftwareVersion = 0xcc
@@ -107,7 +108,8 @@ class MessageHeader:
         try:
             msg_type = MessageType(msg_type_raw)
         except ValueError:
-            print(f'Unknown message type: 0x{msg_type_raw:02x} ({msg_type_raw})')
+            print(f'⚠️  UNKNOWN MESSAGE TYPE: 0x{msg_type_raw:02x} ({msg_type_raw})')
+            print(f'    Data length: {length} bytes')
             # Create a dynamic enum value for unknown types
             msg_type = msg_type_raw
             
@@ -174,14 +176,25 @@ class MessageHeader:
             Unplugged = readable.Unplugged
             Phase = readable.Phase
 
-        # Handle known MessageType enums
+        # Handle unknown MessageType enums
         if not isinstance(self.type, MessageType):
             # Unknown message type (raw int)
+            print(f'⚠️  UNKNOWN MESSAGE TYPE: 0x{self.type:02x} ({self.type})')
+            print(f'    Data length: {self.length} bytes')
             if data:
-                print(self.type)
-                print(f'Skipping unknown message type: 0x{self.type:02x} with {len(data)} bytes of data')
+                print(f'    First 32 bytes (hex): {data[:32].hex()}')
+                print(f'    First 32 bytes (ascii): {self._safe_ascii(data[:32])}')
+                
+                # Try to parse as different common structures
+                if len(data) >= 4:
+                    int_val = struct.unpack('<I', data[0:4])[0]
+                    print(f'    First 4 bytes as uint32: {int_val} (0x{int_val:08x})')
+                
+                if len(data) >= 8:
+                    int_val2 = struct.unpack('<I', data[4:8])[0]
+                    print(f'    Next 4 bytes as uint32: {int_val2} (0x{int_val2:08x})')
             else:
-                print(f'Skipping unknown message type: 0x{self.type:02x} (no data)')
+                print(f'    (No data payload)')
             return None
 
         if data:
@@ -208,11 +221,19 @@ class MessageHeader:
             if message_class:
                 return message_class(self, data)
             else:
-                print(f'Unknown message type: {self.type}, data: {data[:50] if len(data) > 50 else data}')
+                print(f'⚠️  UNHANDLED MESSAGE TYPE: {self.type.name} (0x{self.type:02x})')
+                print(f'    Data length: {len(data)} bytes')
+                print(f'    First 32 bytes (hex): {data[:32].hex()}')
+                print(f'    First 32 bytes (ascii): {self._safe_ascii(data[:32])}')
                 return None
         else:
             if self.type == MessageType.Unplugged:
                 return Unplugged(self)
             else:
-                print(f'Unknown message type without data: {self.type}')
+                print(f'⚠️  MESSAGE WITHOUT DATA: {self.type.name} (0x{self.type:02x})')
                 return None
+    
+    @staticmethod
+    def _safe_ascii(data: bytes) -> str:
+        """Convert bytes to safe ASCII representation"""
+        return ''.join(chr(b) if 32 <= b < 127 else f'\\x{b:02x}' for b in data)

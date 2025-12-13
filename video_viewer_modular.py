@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """
-Modular Video Viewer Application
+NiceGUI Video Viewer Application
 
-A CarPlay/Android Auto viewer built using modular components:
-- video_decoder: Video frame decoding
-- audio_handler: Audio playback and recording
-- touch_handler: Touch input management
-- device_finder: USB device discovery
-- stats_tracker: Performance and statistics tracking
+A modern CarPlay/Android Auto viewer built with NiceGUI and modular components.
+Features a clean web-based interface with real-time updates.
 
-This demonstrates how to use the modular components to build applications.
+Requirements:
+    pip install nicegui pillow numpy pyusb av pyaudio
 """
 
 import sys
 import os
-import tkinter as tk
-from tkinter import ttk
-from PIL import Image, ImageTk
-import queue
+import asyncio
+import io
+import base64
+from typing import Optional
+from PIL import Image
 import numpy as np
+
+# NiceGUI imports
+from nicegui import ui, app
 
 # Add uploads directory to path for dongle driver imports
 sys.path.insert(0, '/mnt/user-data/uploads')
@@ -36,33 +37,18 @@ from carplay_dongle.readable import VideoData, AudioData, Plugged, Unplugged, DE
 from carplay_dongle.sendable import SendTouch, SendAudio
 
 
-class ModularVideoViewer:
+class NiceGUIVideoViewer:
     """
-    Video viewer application built with modular components
+    Modern video viewer application built with NiceGUI
     """
     
-    def __init__(self, enable_frame_saver: bool = False, fullscreen: bool = True):
+    def __init__(self, enable_frame_saver: bool = False):
         """
         Initialize the viewer
         
         Args:
             enable_frame_saver: Whether to save raw frames for debugging
-            fullscreen: Whether to start in fullscreen mode
         """
-        # Create main window
-        self.root = tk.Tk()
-        self.root.title("CarPlay/Android Auto Viewer (Modular)")
-        
-        # Set fullscreen mode
-        self.fullscreen = fullscreen
-        if self.fullscreen:
-            self.root.attributes('-fullscreen', True)
-            # Bind Escape key to exit fullscreen
-            self.root.bind('<Escape>', self.toggle_fullscreen)
-            self.root.bind('<F11>', self.toggle_fullscreen)
-        else:
-            self.root.geometry("1200x900")
-        
         # Initialize modular components
         self.decoder = VideoDecoder()
         self.stats = StatsTracker()
@@ -82,119 +68,22 @@ class ModularVideoViewer:
         self.connected = False
         self.phone_type = None
         
-        # UI components
-        self.frame_queue = queue.Queue(maxsize=5)
-        self.show_controls = True
-        self.setup_ui()
+        # Current frame data
+        self.current_frame: Optional[Image.Image] = None
+        self.current_frame_base64: Optional[str] = None
         
-        # Start UI update loop
-        self.update_display()
-    
-    def toggle_fullscreen(self, event=None):
-        """Toggle fullscreen mode"""
-        self.fullscreen = not self.fullscreen
-        self.root.attributes('-fullscreen', self.fullscreen)
-        return "break"  # Prevent event propagation
-    
-    def toggle_controls(self, event=None):
-        """Toggle visibility of control panels (press 'h' to hide/show)"""
-        self.show_controls = not self.show_controls
+        # UI elements (will be set when page is created)
+        self.video_image = None
+        self.status_label = None
+        self.stats_label = None
+        self.info_label = None
+        self.mic_button = None
+        self.controls_visible = True
         
-        if self.show_controls:
-            self.control_frame.pack(fill=tk.X, before=self.separator)
-            self.separator.pack(fill=tk.X, pady=5, before=self.video_frame)
-            self.info_frame.pack(fill=tk.X)
-        else:
-            self.control_frame.pack_forget()
-            self.separator.pack_forget()
-            self.info_frame.pack_forget()
-    
-    def setup_ui(self):
-        """Setup the user interface"""
-        # Top control bar
-        self.control_frame = ttk.Frame(self.root, padding="10")
-        self.control_frame.pack(fill=tk.X)
-        
-        # Status indicator
-        self.status_label = ttk.Label(
-            self.control_frame,
-            text="● Not Connected",
-            font=("Arial", 11, "bold"),
-            foreground="red"
-        )
-        self.status_label.pack(side=tk.LEFT, padx=5)
-        
-        # Stats display
-        self.stats_label = ttk.Label(
-            self.control_frame,
-            text="Frames: 0 | FPS: 0 | Decode: 0%",
-            font=("Arial", 10)
-        )
-        self.stats_label.pack(side=tk.LEFT, padx=20)
-        
-        # Microphone toggle button
-        self.mic_button = ttk.Button(
-            self.control_frame,
-            text="🎤 Enable Mic",
-            command=self.toggle_microphone
-        )
-        self.mic_button.pack(side=tk.RIGHT, padx=5)
-        
-        # Help text
-        help_label = ttk.Label(
-            self.control_frame,
-            text="ESC/F11: Fullscreen | H: Toggle Controls",
-            font=("Arial", 9),
-            foreground="gray"
-        )
-        help_label.pack(side=tk.RIGHT, padx=20)
-        
-        # Separator
-        self.separator = ttk.Separator(self.root, orient=tk.HORIZONTAL)
-        self.separator.pack(fill=tk.X, pady=5)
-        
-        # Video display area (takes all available space)
-        self.video_frame = ttk.Frame(self.root)
-        self.video_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
-        
-        # Canvas for video (maximized - no padding)
-        self.canvas = tk.Canvas(
-            self.video_frame,
-            bg="black",
-            highlightthickness=0
-        )
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-        
-        # Placeholder text
-        self.placeholder_label = ttk.Label(
-            self.video_frame,
-            text="Waiting for connection...\n\nConnect your phone via USB\n\n(Press ESC or F11 to exit fullscreen)",
-            font=("Arial", 14),
-            foreground="white",
-            background="black"
-        )
-        self.placeholder_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-        
-        # Bind touch events
-        self.canvas.bind("<Button-1>", self._on_mouse_down)
-        self.canvas.bind("<B1-Motion>", self._on_mouse_move)
-        self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
-        
-        # Bind keyboard shortcuts
-        self.root.bind('<h>', self.toggle_controls)
-        self.root.bind('<H>', self.toggle_controls)
-        
-        # Bottom info bar
-        self.info_frame = ttk.Frame(self.root, padding="5")
-        self.info_frame.pack(fill=tk.X)
-        
-        self.info_label = ttk.Label(
-            self.info_frame,
-            text="Ready to connect",
-            font=("Arial", 9),
-            foreground="gray"
-        )
-        self.info_label.pack()
+        # Track previous state for notifications
+        self.prev_connected = False
+        self.prev_phone_type = None
+        self.driver_failed = False
     
     def _send_touch_event(self, x: float, y: float, action: TouchAction):
         """Send touch event to driver"""
@@ -207,18 +96,6 @@ class ModularVideoViewer:
         except Exception as e:
             print(f"Error sending touch: {e}")
     
-    def _on_mouse_down(self, event):
-        """Handle mouse down (touch down)"""
-        self.touch_handler.handle_down(event.x, event.y)
-    
-    def _on_mouse_move(self, event):
-        """Handle mouse move (touch move)"""
-        self.touch_handler.handle_move(event.x, event.y)
-    
-    def _on_mouse_up(self, event):
-        """Handle mouse up (touch up)"""
-        self.touch_handler.handle_up(event.x, event.y)
-    
     def _send_audio_to_device(self, audio_data: np.ndarray):
         """Callback for audio handler to send mic data to device"""
         if self.driver and self.connected:
@@ -230,20 +107,26 @@ class ModularVideoViewer:
     def toggle_microphone(self):
         """Toggle microphone on/off"""
         if not self.audio_handler:
-            print("Audio handler not initialized")
+            ui.notify("Audio handler not initialized", type='warning')
             return
         
         if self.audio_handler.is_recording():
             self.audio_handler.stop_input()
-            self.mic_button.config(text="🎤 Enable Mic")
-            self.info_label.config(text="Microphone disabled")
+            if self.mic_button:
+                self.mic_button.props('label="🎤 Enable Mic" color=primary')
+            if self.info_label:
+                self.info_label.set_text("Microphone disabled")
+            ui.notify("Microphone disabled", type='info')
         else:
             self.audio_handler.start_input()
-            self.mic_button.config(text="🎤 Disable Mic")
-            self.info_label.config(text="Microphone enabled")
+            if self.mic_button:
+                self.mic_button.props('label="🎤 Disable Mic" color=red')
+            if self.info_label:
+                self.info_label.set_text("Microphone enabled")
+            ui.notify("Microphone enabled", type='positive')
     
     def on_message(self, message):
-        """Handle messages from the dongle driver"""
+        """Handle messages from the dongle driver (called from background thread)"""
         try:
             if isinstance(message, VideoData):
                 self.handle_video_frame(message)
@@ -255,14 +138,12 @@ class ModularVideoViewer:
                 self.connected = True
                 self.phone_type = message.phone_type.name
                 print(f"Phone connected: {self.phone_type}")
-                self.root.after(0, self.update_ui_state)
             
             elif isinstance(message, Unplugged):
                 self.connected = False
                 self.phone_type = None
                 print("Phone disconnected")
-                self.root.after(0, self.update_ui_state)
-            
+        
         except Exception as e:
             print(f"Error handling message: {e}")
             import traceback
@@ -295,15 +176,8 @@ class ModularVideoViewer:
             
             # Display frame if decoded
             if decoded_frame is not None:
-                image = Image.fromarray(decoded_frame)
-                try:
-                    self.frame_queue.put_nowait(image)
-                except queue.Full:
-                    pass  # Drop frame if queue is full
-            
-            # Update UI (throttled)
-            if self.stats.total_frames % 10 == 0:
-                self.root.after(0, self.update_ui_state)
+                self.current_frame = Image.fromarray(decoded_frame)
+                self.update_video_display()
         
         except Exception as e:
             print(f"Error handling video frame: {e}")
@@ -330,86 +204,132 @@ class ModularVideoViewer:
         except Exception as e:
             print(f"Error handling audio: {e}")
     
-    def update_ui_state(self):
-        """Update UI based on current state"""
-        # Update status indicator
-        if self.connected:
-            self.status_label.config(
-                text=f"● Connected ({self.phone_type})",
-                foreground="green"
-            )
-            self.placeholder_label.place_forget()
-        else:
-            self.status_label.config(
-                text="● Not Connected",
-                foreground="red"
-            )
+    def image_to_base64(self, image: Image.Image, max_width: int = 1920) -> str:
+        """Convert PIL Image to base64 string for display"""
+        # Resize if too large
+        if image.width > max_width:
+            ratio = max_width / image.width
+            new_height = int(image.height * ratio)
+            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
         
-        # Update stats
-        stats = self.stats.get_stats_dict()
-        stats_text = (
-            f"Frames: {stats['total_frames']} | "
-            f"FPS: {stats['current_fps']:.1f} | "
-            f"Decode: {stats['decode_rate']:.1f}%"
-        )
-        if stats['current_resolution']:
-            w, h = stats['current_resolution']
-            stats_text += f" | {w}x{h}"
-        
-        self.stats_label.config(text=stats_text)
+        # Convert to base64
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=85)
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        return f"data:image/jpeg;base64,{img_str}"
     
-    def update_display(self):
-        """Update video display (called periodically)"""
-        try:
-            # Try to get a frame from queue
+    def update_video_display(self):
+        """Update the video display with current frame"""
+        if self.current_frame and self.video_image:
             try:
-                image = self.frame_queue.get_nowait()
-                
-                # Get canvas dimensions
-                canvas_width = self.canvas.winfo_width()
-                canvas_height = self.canvas.winfo_height()
-                
-                if canvas_width > 1 and canvas_height > 1:
-                    # Calculate scaling to maximize display while maintaining aspect ratio
-                    scale_w = canvas_width / image.width
-                    scale_h = canvas_height / image.height
-                    scale = min(scale_w, scale_h)
-                    
-                    new_width = int(image.width * scale)
-                    new_height = int(image.height * scale)
-                    
-                    # Resize and display
-                    resized_image = image.resize(
-                        (new_width, new_height),
-                        Image.Resampling.LANCZOS
-                    )
-                    photo = ImageTk.PhotoImage(resized_image)
-                    
-                    self.canvas.delete("all")
-                    # Center the image
-                    x = (canvas_width - new_width) // 2
-                    y = (canvas_height - new_height) // 2
-                    self.canvas.create_image(x, y, anchor=tk.NW, image=photo)
-                    self.canvas.image = photo  # Keep reference
-                    
-                    # Update touch handler with display info
-                    self.touch_handler.set_display_info(
-                        video_size=(image.width, image.height),
-                        display_size=(new_width, new_height),
-                        display_offset=(x, y)
-                    )
-            
-            except queue.Empty:
+                self.current_frame_base64 = self.image_to_base64(self.current_frame)
+                self.video_image.set_source(self.current_frame_base64)
+            except Exception as e:
+                # Silently ignore errors (might happen during shutdown)
                 pass
-        
-        except Exception as e:
-            print(f"Error updating display: {e}")
-        
-        # Schedule next update
-        self.root.after(33, self.update_display)  # ~30 FPS
     
-    def start_driver(self):
-        """Start the dongle driver"""
+    def update_ui_state(self):
+        """Update UI based on current state (safe to call from UI thread)"""
+        try:
+            # Check for driver failure
+            if self.driver_failed:
+                ui.notify("Driver connection failed", type='negative')
+                self.driver_failed = False
+            
+            # Check for connection state changes
+            if self.connected != self.prev_connected:
+                if self.connected:
+                    ui.notify(f"Phone connected: {self.phone_type}", type='positive')
+                else:
+                    ui.notify("Phone disconnected", type='warning')
+                self.prev_connected = self.connected
+                self.prev_phone_type = self.phone_type
+            
+            # Update status indicator
+            if self.status_label:
+                if self.connected:
+                    self.status_label.set_text(f"● Connected ({self.phone_type})")
+                    self.status_label.classes(remove='text-red-500', add='text-green-500')
+                else:
+                    self.status_label.set_text("● Not Connected")
+                    self.status_label.classes(remove='text-green-500', add='text-red-500')
+            
+            # Update stats
+            if self.stats_label:
+                stats = self.stats.get_stats_dict()
+                stats_text = (
+                    f"Frames: {stats['total_frames']} | "
+                    f"FPS: {stats['current_fps']:.1f} | "
+                    f"Decode: {stats['decode_rate']:.1f}%"
+                )
+                if stats['current_resolution']:
+                    w, h = stats['current_resolution']
+                    stats_text += f" | {w}x{h}"
+                
+                self.stats_label.set_text(stats_text)
+        except Exception as e:
+            # Silently ignore UI update errors
+            pass
+    
+    def handle_touch(self, e, action: str):
+        """Handle touch/mouse events with proper coordinate calculation"""
+        if not self.connected or not self.current_frame:
+            return
+        
+        try:
+            # Get bounding rectangle and mouse position from event args
+            # NiceGUI passes args as a list, not a dict
+            if not e.args or len(e.args) < 3:
+                print(f"Invalid event args: {e.args}")
+                return
+                
+            rect = e.args[0]
+            client_x = e.args[1]
+            client_y = e.args[2]
+            
+            if not rect or not isinstance(rect, dict):
+                print(f"Invalid rect data: {rect}")
+                return
+            
+            # For mouse move, check if button is pressed
+            if action == 'move':
+                buttons = e.args[3] if len(e.args) > 3 else 0
+                if buttons != 1:  # Left button not pressed
+                    return
+            
+            # Calculate position within image
+            x = client_x - rect.get('left', 0)
+            y = client_y - rect.get('top', 0)
+            
+            # Normalize to 0-1 range
+            width = rect.get('width', 1)
+            height = rect.get('height', 1)
+            
+            if width <= 0 or height <= 0:
+                print(f"Invalid dimensions: {width}x{height}")
+                return
+            
+            norm_x = max(0.0, min(1.0, x / width))
+            norm_y = max(0.0, min(1.0, y / height))
+            
+            # Send touch event
+            if action == 'down':
+                print(f"Touch DOWN at ({norm_x:.3f}, {norm_y:.3f})")
+                self._send_touch_event(norm_x, norm_y, TouchAction.Down)
+                self.touch_handler.touch_active = True
+            elif action == 'move':
+                self._send_touch_event(norm_x, norm_y, TouchAction.Move)
+            elif action == 'up':
+                print(f"Touch UP at ({norm_x:.3f}, {norm_y:.3f})")
+                self._send_touch_event(norm_x, norm_y, TouchAction.Up)
+                self.touch_handler.touch_active = False
+        except Exception as e:
+            print(f"Error handling touch: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def start_driver_async(self):
+        """Start the dongle driver (async)"""
         print("Searching for USB dongle...")
         
         # Find device
@@ -417,9 +337,9 @@ class ModularVideoViewer:
         
         if not device:
             print("No compatible USB dongle found!")
-            self.info_label.config(
-                text="Error: No USB dongle found. Please connect and restart."
-            )
+            ui.notify("No USB dongle found. Please connect and restart.", type='negative')
+            if self.info_label:
+                self.info_label.set_text("Error: No USB dongle found")
             return False
         
         print(f"Found device!")
@@ -446,82 +366,203 @@ class ModularVideoViewer:
             self.driver.start(DEFAULT_CONFIG)
             
             print("Driver started successfully!")
-            self.info_label.config(text="Waiting for phone connection...")
+            ui.notify("Driver started - waiting for phone connection", type='positive')
+            if self.info_label:
+                self.info_label.set_text("Waiting for phone connection...")
             return True
         
         except Exception as e:
             print(f"Error starting driver: {e}")
             import traceback
             traceback.print_exc()
-            self.info_label.config(text=f"Error: {str(e)}")
+            ui.notify(f"Error: {str(e)}", type='negative')
+            if self.info_label:
+                self.info_label.set_text(f"Error: {str(e)}")
             return False
     
     def on_failure(self):
-        """Handle driver failure"""
+        """Handle driver failure (called from background thread)"""
         print("Driver failed!")
         self.connected = False
-        self.root.after(0, self.update_ui_state)
+        self.driver_failed = True
     
-    def on_closing(self):
-        """Handle window close"""
-        print("Closing application...")
+    def create_ui(self):
+        """Create the NiceGUI interface"""
+        
+        # Custom CSS
+        ui.add_head_html('''
+            <style>
+                .video-container {
+                    width: 100%;
+                    height: calc(100vh - 180px);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    background: #000;
+                }
+                .video-container img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    object-fit: contain;
+                    cursor: pointer;
+                }
+                .control-panel {
+                    background: #1e1e1e;
+                    border-bottom: 2px solid #333;
+                }
+                .info-panel {
+                    background: #1e1e1e;
+                    border-top: 2px solid #333;
+                }
+            </style>
+        ''')
+        
+        # Top control panel
+        with ui.header().classes('control-panel'):
+            with ui.row().classes('w-full items-center justify-between px-4 py-2'):
+                with ui.row().classes('items-center gap-4'):
+                    self.status_label = ui.label('● Not Connected').classes(
+                        'text-lg font-bold text-red-500'
+                    )
+                    self.stats_label = ui.label(
+                        'Frames: 0 | FPS: 0 | Decode: 0%'
+                    ).classes('text-sm text-gray-300')
+                
+                with ui.row().classes('items-center gap-2'):
+                    ui.label('ESC: Fullscreen | H: Toggle UI').classes(
+                        'text-xs text-gray-500'
+                    )
+                    self.mic_button = ui.button(
+                        '🎤 Enable Mic',
+                        on_click=self.toggle_microphone
+                    ).props('color=primary size=sm')
+        
+        # Main video display area
+        with ui.element('div').classes('video-container'):
+            self.video_image = ui.image().props('fit=contain').classes('w-full h-full')
+            
+            # Prevent default drag/select behaviors using CSS
+            self.video_image.style('user-select: none; -webkit-user-drag: none;')
+            
+            # Mouse events - pass getBoundingClientRect(), clientX, clientY, buttons
+            # The .prevent suffix in NiceGUI events prevents default behavior
+            self.video_image.on('mousedown.prevent', 
+                lambda e: self.handle_touch(e, 'down'),
+                ['event.target.getBoundingClientRect()', 'event.clientX', 'event.clientY'])
+            self.video_image.on('mousemove',
+                lambda e: self.handle_touch(e, 'move'),
+                ['event.target.getBoundingClientRect()', 'event.clientX', 'event.clientY', 'event.buttons'])
+            self.video_image.on('mouseup',
+                lambda e: self.handle_touch(e, 'up'),
+                ['event.target.getBoundingClientRect()', 'event.clientX', 'event.clientY'])
+            
+            # Touch events for mobile
+            self.video_image.on('touchstart.prevent',
+                lambda e: self.handle_touch(e, 'down'),
+                ['event.target.getBoundingClientRect()', 'event.touches[0].clientX', 'event.touches[0].clientY'])
+            self.video_image.on('touchmove.prevent',
+                lambda e: self.handle_touch(e, 'move'),
+                ['event.target.getBoundingClientRect()', 'event.touches[0].clientX', 'event.touches[0].clientY', '1'])
+            self.video_image.on('touchend',
+                lambda e: (setattr(self.touch_handler, 'touch_active', False), None)[1])
+            
+            # Placeholder
+            with ui.element('div').classes('absolute inset-0 flex items-center justify-center'):
+                ui.label('Waiting for connection...').classes(
+                    'text-white text-2xl text-center'
+                ).bind_visibility_from(self, 'current_frame', lambda f: f is None)
+        
+        # Bottom info panel
+        with ui.footer().classes('info-panel'):
+            with ui.row().classes('w-full items-center justify-center px-4 py-2'):
+                self.info_label = ui.label('Ready to connect').classes(
+                    'text-sm text-gray-400'
+                )
+        
+        # Keyboard shortcuts
+        ui.keyboard(on_key=self.handle_keyboard)
+        
+        # Start periodic UI updates
+        ui.timer(0.1, self.update_ui_state)
+    
+    def handle_keyboard(self, e):
+        """Handle keyboard shortcuts"""
+        if e.key == 'Escape' or e.key == 'F11':
+            ui.run_javascript('document.documentElement.requestFullscreen()')
+        elif e.key.lower() == 'h':
+            self.toggle_controls()
+    
+    def toggle_controls(self):
+        """Toggle control visibility"""
+        # Placeholder for future implementation
+        pass
+    
+    def cleanup(self):
+        """Cleanup resources on shutdown"""
+        print("Cleaning up...")
         
         if self.audio_handler:
             self.audio_handler.close()
         
         if self.driver:
             self.driver.close()
-        
-        self.root.destroy()
+
+
+# Global viewer instance
+viewer = None
+
+
+@ui.page('/')
+def main_page():
+    """Main page setup"""
+    global viewer
     
-    def run(self):
-        """Run the application"""
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.root.after(500, self.start_driver)
-        self.root.mainloop()
+    viewer = NiceGUIVideoViewer(
+        enable_frame_saver='--save-frames' in sys.argv or '-s' in sys.argv
+    )
+    
+    viewer.create_ui()
+    
+    # Start driver after UI is ready
+    ui.timer(1.0, viewer.start_driver_async, once=True)
 
 
 def main():
     """Main entry point"""
     print("=" * 60)
-    print("Modular CarPlay/Android Auto Video Viewer")
+    print("NiceGUI CarPlay/Android Auto Video Viewer")
     print("=" * 60)
     print()
     
     # Check for command line options
     enable_frame_saver = '--save-frames' in sys.argv or '-s' in sys.argv
-    windowed = '--windowed' in sys.argv or '-w' in sys.argv
     
     if enable_frame_saver:
         print("Frame saving enabled - raw frames will be saved to raw_frames/")
-        print()
     
-    if windowed:
-        print("Starting in windowed mode")
-        fullscreen = False
-    else:
-        print("Starting in fullscreen mode")
-        print("Press ESC or F11 to toggle fullscreen")
-        print("Press H to hide/show controls")
-        fullscreen = True
-    
+    print("\nStarting web server...")
+    print("Open your browser to: http://localhost:8080")
+    print("\nKeyboard shortcuts:")
+    print("  ESC or F11 : Toggle fullscreen mode")
+    print("  H          : Toggle control panels")
     print()
     
-    # Create and run application
-    app = ModularVideoViewer(
-        enable_frame_saver=enable_frame_saver,
-        fullscreen=fullscreen
+    # Setup cleanup on shutdown
+    app.on_shutdown(lambda: viewer.cleanup() if viewer else None)
+    
+    # Run the application
+    ui.run(
+        title='CarPlay/Android Auto Viewer',
+        port=8080,
+        reload=False,
+        show=True,
+        dark=True,
     )
-    app.run()
 
 
 if __name__ == '__main__':
-    print("\nUsage: python video_viewer_modular.py [options]")
+    print("\nUsage: python video_viewer_nicegui.py [options]")
     print("Options:")
     print("  --save-frames, -s : Save raw frames for debugging")
-    print("  --windowed, -w    : Start in windowed mode (default: fullscreen)")
-    print("\nKeyboard shortcuts:")
-    print("  ESC or F11        : Toggle fullscreen mode")
-    print("  H                 : Hide/show control panels")
     print()
     main()

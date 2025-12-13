@@ -40,7 +40,43 @@ class Message:
 class Command(Message):
     def __init__(self, header: MessageHeader, data: bytes):
         super().__init__(header)
-        self.value = CommandMapping(struct.unpack('<I', data[0:4])[0])
+        command_value = struct.unpack('<I', data[0:4])[0]
+        
+        try:
+            self.value = CommandMapping(command_value)
+            print(f'📩 COMMAND: {self.value.name} ({command_value})')
+        except ValueError:
+            # Unknown command
+            self.value = None
+            print(f'⚠️  UNKNOWN COMMAND: {command_value} (0x{command_value:08x})')
+            print(f'    Known commands range: 0-{max(CommandMapping).value}')
+            
+            # Show data if there's more
+            if len(data) > 4:
+                print(f'    Extra data length: {len(data) - 4} bytes')
+                print(f'    Extra data (hex): {data[4:].hex()}')
+            
+            # Suggest possible command category
+            if command_value < 100:
+                print(f'    Category: Likely basic control command')
+            elif 100 <= command_value < 200:
+                print(f'    Category: Likely navigation/UI command')
+            elif 200 <= command_value < 300:
+                print(f'    Category: Likely media control command')
+            elif 300 <= command_value < 400:
+                print(f'    Category: Likely phone control command')
+            elif command_value >= 1000:
+                print(f'    Category: Likely wireless/connectivity command')
+            
+            # List similar known commands
+            nearby_commands = [
+                (name, val) for name, val in CommandMapping.__members__.items()
+                if abs(val - command_value) <= 10
+            ]
+            if nearby_commands:
+                print(f'    Nearby known commands:')
+                for name, val in sorted(nearby_commands, key=lambda x: abs(x[1] - command_value)):
+                    print(f'      - {name}: {val} (diff: {command_value - val:+d})')
 
 
 class ManufacturerInfo(Message):
@@ -100,16 +136,17 @@ class Plugged(Message):
         if wifi_avail:
             self.phone_type = PhoneType(struct.unpack('<I', data[0:4])[0])
             self.wifi = struct.unpack('<I', data[4:8])[0]
-            print(f'wifi avail, phone type: {self.phone_type.name}, wifi: {self.wifi}')
+            print(f'📱 PHONE PLUGGED: {self.phone_type.name}, WiFi available: {self.wifi}')
         else:
             self.phone_type = PhoneType(struct.unpack('<I', data[0:4])[0])
             self.wifi = None
-            print(f'no wifi avail, phone type: {self.phone_type.name}')
+            print(f'📱 PHONE PLUGGED: {self.phone_type.name}, WiFi not available')
 
 
 class Unplugged(Message):
     def __init__(self, header: MessageHeader):
         super().__init__(header)
+        print(f'📱 PHONE UNPLUGGED')
 
 
 class AudioFormat:
@@ -146,7 +183,12 @@ class AudioData(Message):
         self.data = None
         
         if amount == 1:
-            self.command = AudioCommand(struct.unpack('<b', data[12:13])[0])
+            cmd_val = struct.unpack('<b', data[12:13])[0]
+            try:
+                self.command = AudioCommand(cmd_val)
+            except ValueError:
+                print(f'⚠️  UNKNOWN AUDIO COMMAND: {cmd_val}')
+                print(f'    Known audio commands: {[c.name for c in AudioCommand]}')
         elif amount == 4:
             self.volume_duration = struct.unpack('<f', data[12:16])[0]
         else:
@@ -191,7 +233,8 @@ class MediaData(Message):
                 'media': json.loads(media_data.decode('utf-8'))
             }
         else:
-            print(f'Unexpected media type: {media_type}')
+            print(f'⚠️  UNEXPECTED MEDIA TYPE: {media_type}')
+            print(f'    Known media types: {[t.name for t in MediaType]}')
 
 
 class Opened(Message):
@@ -204,6 +247,7 @@ class Opened(Message):
         self.packet_max = struct.unpack('<I', data[16:20])[0]
         self.i_box = struct.unpack('<I', data[20:24])[0]
         self.phone_mode = struct.unpack('<I', data[24:28])[0]
+        print(f'📺 SESSION OPENED: {self.width}x{self.height} @ {self.fps}fps')
 
 
 class BoxInfo(Message):
@@ -216,3 +260,4 @@ class Phase(Message):
     def __init__(self, header: MessageHeader, data: bytes):
         super().__init__(header)
         self.phase = struct.unpack('<I', data[0:4])[0]
+        print(f'🔄 PHASE CHANGE: {self.phase}')
