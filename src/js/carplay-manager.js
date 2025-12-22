@@ -459,7 +459,7 @@ class CarPlayManager extends EventEmitter {
     if (!this.driver) return;
 
     try {
-      const { SendAudio } = await import('./carplay/index.js');
+      const { SendAudio } = await import('../carplay/index.js');
       await this.driver.send(new SendAudio(audioData));
     } catch (error) {
       console.error('Failed to send microphone audio:', error);
@@ -479,14 +479,14 @@ class CarPlayManager extends EventEmitter {
   async sendTouch(x, y, action) {
     if (!this.driver) return;
 
-    const { SendTouch, TouchAction } = await import('./carplay/index.js');
+    const { SendTouch, TouchAction } = await import('../carplay/index.js');
     await this.driver.send(new SendTouch(x, y, action));
   }
 
   async sendCommand(command) {
     if (!this.driver) return;
 
-    const { SendCommand } = await import('./carplay/index.js');
+    const { SendCommand } = await import('../carplay/index.js');
     await this.driver.send(new SendCommand(command));
   }
 

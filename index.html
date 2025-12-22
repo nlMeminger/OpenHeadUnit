@@ -21,7 +21,8 @@
                 </div>
             </div>
             <div class="status-icons">
-                <span class="temp">72°F</span>
+                <span class="temp" id="tempDisplay">72°F</span>
+                <span class="light-level" id="lightDisplay" title="Ambient light">💡 -- lux</span>
                 <button class="exit-btn" id="exitBtn" title="Exit Application">✕</button>
             </div>
         </div>
@@ -171,9 +172,30 @@
                         <div class="settings-section">
                             <h3 class="section-title">Display</h3>
                             <div class="setting-item">
+                                <label>Auto Brightness</label>
+                                <input type="checkbox" id="autoBrightness">
+                            </div>
+                            <div class="setting-item">
                                 <label>Default Brightness (%)</label>
                                 <input type="number" id="defaultBrightness" min="0" max="100" step="5">
                             </div>
+                            <div class="setting-item">
+                                <label>Current Light Level</label>
+                                <span id="lightLevelDisplay">-- lux</span>
+                            </div>
+                            <div class="setting-item">
+                                <label>Recommended Brightness</label>
+                                <span id="recommendedBrightness">--%</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">CarPlay</h3>
+                            <div class="setting-item">
+                                <label>Debug Mode</label>
+                                <input type="checkbox" id="carplayDebugMode">
+                            </div>
+                            <p class="setting-description">When enabled, you must manually click "Connect Device" to start CarPlay. When disabled, CarPlay connects automatically when you open the app.</p>
                         </div>
 
                         <div class="settings-section">

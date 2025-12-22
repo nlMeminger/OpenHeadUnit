@@ -49,4 +49,27 @@ document.getElementById('exitBtn').addEventListener('click', () => {
     ipcRenderer.send('exit-app');
 });
 
+// Temperature display
+const tempElement = document.querySelector('.status-icons .temp');
+
+// Listen for temperature updates from backend
+ipcRenderer.on('temperature-update', (event, tempData) => {
+    if (tempData && tempElement) {
+        // Display temperature in Fahrenheit (can be changed to Celsius if preferred)
+        tempElement.textContent = `${tempData.fahrenheit}°F`;
+
+        // Optional: Add color coding based on temperature
+        if (tempData.fahrenheit < 60) {
+            tempElement.style.color = '#4da6ff'; // Blue for cold
+        } else if (tempData.fahrenheit > 85) {
+            tempElement.style.color = '#ff6b6b'; // Red for hot
+        } else {
+            tempElement.style.color = '#00ff88'; // Green for normal
+        }
+    }
+});
+
+// Request initial temperature
+ipcRenderer.send('get-temperature');
+
 console.log('Basic controls loaded');

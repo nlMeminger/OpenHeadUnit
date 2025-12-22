@@ -2,7 +2,7 @@
   "window": {
     "width": 1200,
     "height": 720,
-    "fullscreen": false
+    "fullscreen": true
   },
   "audio": {
     "outputVolume": 50,
@@ -17,7 +17,10 @@
     }
   },
   "display": {
-    "brightness": 80
+    "brightness": 80,
+    "autoBrightness": true,
+    "minBrightness": 20,
+    "maxBrightness": 100
   },
   "radio": {
     "presets": [
@@ -50,6 +53,7 @@
   },
   "carplay": {
     "width": null,
-    "height": null
+    "height": null,
+    "debugMode": false
   }
 }
