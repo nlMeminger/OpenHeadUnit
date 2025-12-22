@@ -1,0 +1,664 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: #fff;
+}
+
+.infotainment {
+    width: 900px;
+    height: 600px;
+    background: #1a1a1a;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+}
+
+.status-bar {
+    background: #0a0a0a;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    gap: 20px;
+}
+
+.controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.control-icon {
+    font-size: 16px;
+    color: #888;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.control-icon:hover {
+    color: #00ff88;
+}
+
+.control-icon.muted {
+    color: #ff4444;
+}
+
+.exit-btn {
+    background: transparent;
+    border: none;
+    color: #555;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+}
+
+.exit-btn:hover {
+    background: #2a2a2a;
+    color: #ff4444;
+    opacity: 1;
+}
+
+input[type="range"] {
+    width: 80px;
+    height: 4px;
+    background: #333;
+    outline: none;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #00ff88;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.clock {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.status-icons {
+    display: flex;
+    gap: 15px;
+    font-size: 14px;
+    color: #888;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.content-area {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.home-screen {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    max-width: 600px;
+}
+
+.app-tile {
+    background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.app-tile:hover {
+    transform: translateY(-5px);
+    border-color: #00ff88;
+    box-shadow: 0 10px 30px rgba(0,255,136,0.2);
+}
+
+.app-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.app-name {
+    font-size: 14px;
+    color: #ccc;
+}
+
+/* CarPlay Interface */
+.carplay-interface {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 1000;
+}
+
+.carplay-interface.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.carplay-interface.fullscreen .carplay-status {
+    display: none;
+}
+
+.carplay-status {
+    padding: 20px;
+    text-align: center;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+}
+
+.carplay-status h2 {
+    font-size: 24px;
+    color: #00ff88;
+    margin-bottom: 10px;
+}
+
+.carplay-status p {
+    color: #888;
+    font-size: 14px;
+}
+
+.connect-btn {
+    margin-top: 20px;
+    padding: 15px 40px;
+    background: #00ff88;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.connect-btn:hover {
+    background: #00dd77;
+    transform: scale(1.05);
+}
+
+.connect-btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    transform: scale(1);
+}
+
+.carplay-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}
+
+.carplay-interface.fullscreen .carplay-screen {
+    padding: 0;
+}
+
+#carplayCanvas {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: none;
+    object-fit: contain;
+    cursor: pointer;
+    touch-action: none;
+    z-index: 10;
+}
+
+#carplayCanvas:active {
+    cursor: grabbing;
+}
+
+.carplay-interface.fullscreen #carplayCanvas {
+    border-radius: 0;
+}
+
+.carplay-placeholder {
+    text-align: center;
+    color: #666;
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.carplay-placeholder .icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.carplay-placeholder p {
+    font-size: 18px;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #666;
+}
+
+.status-dot.connected {
+    background: #00ff88;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Radio Interface */
+.radio-interface {
+    display: none;
+    padding: 40px;
+    max-width: 600px;
+    margin: 0 auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.radio-interface.active {
+    display: block;
+}
+
+.frequency-display {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.frequency-number {
+    font-size: 72px;
+    font-weight: bold;
+    color: #00ff88;
+    letter-spacing: 8px;
+    text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+}
+
+.frequency-label {
+    font-size: 18px;
+    color: #888;
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+}
+
+.radio-status {
+    font-size: 14px;
+    color: #00ff88;
+    margin-top: 10px;
+    opacity: 0.8;
+}
+
+.tuner-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.tune-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
+    border: 2px solid #333;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tune-btn:hover {
+    border-color: #00ff88;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.seek-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.seek-btn:hover {
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
+.frequency-slider {
+    width: 100%;
+    margin: 20px 0;
+}
+
+.frequency-slider input[type="range"] {
+    width: 100%;
+    height: 6px;
+}
+
+.presets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.preset-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 20px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.preset-btn:hover {
+    border-color: #00ff88;
+    color: #fff;
+}
+
+.preset-btn.active {
+    background: #00ff88;
+    color: #000;
+    border-color: #00ff88;
+    font-weight: bold;
+}
+
+.preset-number {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.preset-freq {
+    font-size: 16px;
+    margin-top: 5px;
+}
+
+.nav-bar {
+    background: #0a0a0a;
+    padding: 15px;
+    display: flex;
+    justify-content: space-around;
+    border-top: 1px solid #333;
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.nav-btn:hover {
+    color: #00ff88;
+}
+
+.nav-btn.active {
+    color: #00ff88;
+}
+
+/* Settings Interface */
+.settings-interface {
+    display: none;
+    padding: 20px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.settings-interface.active {
+    display: block;
+}
+
+.settings-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.settings-title {
+    font-size: 32px;
+    color: #00ff88;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.settings-section {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-size: 18px;
+    color: #00ff88;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-item label {
+    color: #ccc;
+    font-size: 14px;
+}
+
+.setting-item input[type="number"] {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    width: 100px;
+    font-size: 14px;
+}
+
+.setting-item input[type="number"]:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.setting-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #00ff88;
+}
+
+.presets-editor {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.preset-editor-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #0a0a0a;
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.preset-editor-item label {
+    color: #888;
+    font-size: 12px;
+    min-width: 60px;
+}
+
+.preset-editor-item input {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    flex: 1;
+    font-size: 14px;
+}
+
+.preset-editor-item input:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+    justify-content: center;
+}
+
+.settings-btn {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn {
+    background: #00ff88;
+    color: #000;
+}
+
+.save-btn:hover {
+    background: #00dd77;
+    transform: scale(1.05);
+}
+
+.reset-btn {
+    background: #333;
+    color: #ccc;
+}
+
+.reset-btn:hover {
+    background: #444;
+    transform: scale(1.05);
+}
+
+.settings-status {
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+.settings-status.success {
+    background: rgba(0, 255, 136, 0.1);
+    color: #00ff88;
+}
+
+.settings-status.error {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff4444;
+}
+
+.back-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #888;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-btn:hover {
+    border-color: #00ff88;
+    color: #00ff88;
+}

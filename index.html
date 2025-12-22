@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+    <title>Car Infotainment System</title>
+    <link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+    <div class="infotainment">
+        <div class="status-bar">
+            <div class="clock" id="clock">00:00:00</div>
+            <div class="controls">
+                <div class="control-group">
+                    <span class="control-icon" id="muteBtn">🔊</span>
+                    <input type="range" id="output" min="0" max="100" value="50">
+                </div>
+                <div class="control-group">
+                    <span class="control-icon">☀️</span>
+                    <input type="range" id="brightnessSlider" min="0" max="100" value="80">
+                </div>
+            </div>
+            <div class="status-icons">
+                <span class="temp">72°F</span>
+                <button class="exit-btn" id="exitBtn" title="Exit Application">✕</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="content-area">
+                <div class="home-screen" id="homeScreen">
+                    <div class="app-tile" data-app="navigation">
+                        <div class="app-icon">🗺️</div>
+                        <div class="app-name">Navigation</div>
+                    </div>
+                    <div class="app-tile" data-app="media">
+                        <div class="app-icon">🎵</div>
+                        <div class="app-name">Media</div>
+                    </div>
+                    <div class="app-tile" data-app="radio">
+                        <div class="app-icon">📻</div>
+                        <div class="app-name">Radio</div>
+                    </div>
+                    <div class="app-tile" data-app="phone">
+                        <div class="app-icon">📱</div>
+                        <div class="app-name">CarPlay</div>
+                    </div>
+                    <div class="app-tile" data-app="settings">
+                        <div class="app-icon">⚙️</div>
+                        <div class="app-name">Settings</div>
+                    </div>
+                    <div class="app-tile" data-app="vehicle">
+                        <div class="app-icon">🚗</div>
+                        <div class="app-name">Vehicle</div>
+                    </div>
+                </div>
+
+                <!-- CarPlay Interface -->
+                <div class="carplay-interface" id="carplayInterface">
+                    <div class="carplay-status">
+                        <h2>CarPlay</h2>
+                        <p id="carplayStatusText">Connect your iPhone to get started</p>
+                        <div class="connection-status">
+                            <span class="status-dot" id="statusDot"></span>
+                            <span id="connectionText">Not Connected</span>
+                        </div>
+                        <button class="connect-btn" id="connectCarPlayBtn">Connect Device</button>
+                    </div>
+
+                    <div class="carplay-screen">
+                        <canvas id="carplayCanvas"></canvas>
+                        <div class="carplay-placeholder" id="carplayPlaceholder">
+                            <div class="icon">📱</div>
+                            <p>Waiting for device connection...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Radio Interface -->
+                <div class="radio-interface" id="radioInterface">
+                    <button class="back-btn" id="backBtn">←</button>
+
+                    <div class="frequency-display">
+                        <div class="frequency-number" id="frequencyDisplay">87.5</div>
+                        <div class="frequency-label">FM MHz</div>
+                        <div class="radio-status" id="radioStatus">📡 Ready</div>
+                    </div>
+
+                    <div class="tuner-controls">
+                        <button class="seek-btn" id="seekDown">⏮</button>
+                        <button class="tune-btn" id="tuneDown">−</button>
+                        <button class="tune-btn" id="tuneUp">+</button>
+                        <button class="seek-btn" id="seekUp">⏭</button>
+                    </div>
+
+                    <div class="frequency-slider">
+                        <input type="range" id="frequencySlider" min="875" max="1080" value="875" step="1">
+                    </div>
+
+                    <div class="presets">
+                        <button class="preset-btn" data-preset="1">
+                            <div class="preset-number">PRESET 1</div>
+                            <div class="preset-freq">88.5</div>
+                        </button>
+                        <button class="preset-btn" data-preset="2">
+                            <div class="preset-number">PRESET 2</div>
+                            <div class="preset-freq">95.7</div>
+                        </button>
+                        <button class="preset-btn" data-preset="3">
+                            <div class="preset-number">PRESET 3</div>
+                            <div class="preset-freq">101.1</div>
+                        </button>
+                        <button class="preset-btn" data-preset="4">
+                            <div class="preset-number">PRESET 4</div>
+                            <div class="preset-freq">104.3</div>
+                        </button>
+                        <button class="preset-btn" data-preset="5">
+                            <div class="preset-number">PRESET 5</div>
+                            <div class="preset-freq">106.7</div>
+                        </button>
+                        <button class="preset-btn" data-preset="6">
+                            <div class="preset-number">PRESET 6</div>
+                            <div class="preset-freq">107.9</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Settings Interface -->
+                <div class="settings-interface" id="settingsInterface">
+                    <button class="back-btn" id="settingsBackBtn">←</button>
+
+                    <div class="settings-content">
+                        <h2 class="settings-title">Settings</h2>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">Window</h3>
+                            <div class="setting-item">
+                                <label>Width</label>
+                                <input type="number" id="windowWidth" min="800" max="3840" step="10">
+                            </div>
+                            <div class="setting-item">
+                                <label>Height</label>
+                                <input type="number" id="windowHeight" min="600" max="2160" step="10">
+                            </div>
+                            <div class="setting-item">
+                                <label>Fullscreen</label>
+                                <input type="checkbox" id="windowFullscreen">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">Audio</h3>
+                            <div class="setting-item">
+                                <label>Microphone Enabled</label>
+                                <input type="checkbox" id="micEnabled">
+                            </div>
+                            <div class="setting-item">
+                                <label>Echo Cancellation</label>
+                                <input type="checkbox" id="echoCancellation">
+                            </div>
+                            <div class="setting-item">
+                                <label>Noise Suppression</label>
+                                <input type="checkbox" id="noiseSuppression">
+                            </div>
+                            <div class="setting-item">
+                                <label>Auto Gain Control</label>
+                                <input type="checkbox" id="autoGainControl">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">Display</h3>
+                            <div class="setting-item">
+                                <label>Default Brightness (%)</label>
+                                <input type="number" id="defaultBrightness" min="0" max="100" step="5">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">Radio Presets</h3>
+                            <div class="presets-editor" id="presetsEditor">
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button class="settings-btn save-btn" id="saveSettingsBtn">Save Settings</button>
+                            <button class="settings-btn reset-btn" id="resetSettingsBtn">Reset to Defaults</button>
+                        </div>
+
+                        <div class="settings-status" id="settingsStatus"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-bar">
+            <button class="nav-btn active">🏠</button>
+            <button class="nav-btn">🗺️</button>
+            <button class="nav-btn">🎵</button>
+            <button class="nav-btn">📞</button>
+            <button class="nav-btn">⚙️</button>
+        </div>
+    </div>
+
+    <!-- Non-module script for basic controls -->
+    <script src="src/js/controls.js"></script>
+
+    <!-- ES6 module script for CarPlay and app functionality -->
+    <script type="module" src="src/js/app.js"></script>
+</body>
+</html>

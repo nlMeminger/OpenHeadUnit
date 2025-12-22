@@ -1,0 +1,55 @@
+{
+  "window": {
+    "width": 1200,
+    "height": 720,
+    "fullscreen": false
+  },
+  "audio": {
+    "outputVolume": 50,
+    "inputVolume": 50,
+    "microphoneEnabled": true,
+    "microphoneSettings": {
+      "echoCancellation": true,
+      "noiseSuppression": true,
+      "autoGainControl": true,
+      "sampleRate": 16000,
+      "channelCount": 1
+    }
+  },
+  "display": {
+    "brightness": 80
+  },
+  "radio": {
+    "presets": [
+      {
+        "number": 1,
+        "frequency": 88.5
+      },
+      {
+        "number": 2,
+        "frequency": 95.7
+      },
+      {
+        "number": 3,
+        "frequency": 101.1
+      },
+      {
+        "number": 4,
+        "frequency": 104.3
+      },
+      {
+        "number": 5,
+        "frequency": 106.7
+      },
+      {
+        "number": 6,
+        "frequency": 107.9
+      }
+    ],
+    "defaultFrequency": 87.5
+  },
+  "carplay": {
+    "width": null,
+    "height": null
+  }
+}

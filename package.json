@@ -1,0 +1,19 @@
+{
+  "name": "my-electron-app",
+  "version": "1.0.0",
+  "description": "Car Infotainment System with CarPlay",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron . --no-sandbox"
+  },
+  "author": "Jane Doe",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.2.7"
+  },
+  "dependencies": {
+    "broadway": "^4.1.0",
+    "loudness": "^0.4.2"
+  }
+}
