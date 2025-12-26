@@ -7,22 +7,37 @@
     <link rel="stylesheet" href="src/css/styles.css">
 </head>
 <body>
+    <!-- Quick Settings Dropdown -->
+    <div class="quick-settings-dropdown" id="quickSettingsDropdown">
+        <div class="quick-settings-content">
+            <div class="quick-settings-header">
+                <button class="close-dropdown-btn" id="closeDropdownBtn">✕</button>
+            </div>
+            <div class="quick-setting-item">
+                <div class="quick-setting-label">
+                    <span class="control-icon" id="muteBtn">🔊</span>
+                    <span>Volume</span>
+                </div>
+                <input type="range" id="output" min="0" max="100" value="50">
+            </div>
+            <div class="quick-setting-item">
+                <div class="quick-setting-label">
+                    <span class="control-icon">☀️</span>
+                    <span>Brightness</span>
+                </div>
+                <input type="range" id="brightnessSlider" min="0" max="100" value="80">
+            </div>
+        </div>
+    </div>
+
     <div class="infotainment">
         <div class="status-bar">
             <div class="clock" id="clock">00:00:00</div>
             <div class="controls">
-                <div class="control-group">
-                    <span class="control-icon" id="muteBtn">🔊</span>
-                    <input type="range" id="output" min="0" max="100" value="50">
-                </div>
-                <div class="control-group">
-                    <span class="control-icon">☀️</span>
-                    <input type="range" id="brightnessSlider" min="0" max="100" value="80">
-                </div>
+                <button class="quick-settings-btn" id="quickSettingsBtn">⚡</button>
             </div>
             <div class="status-icons">
-                <span class="temp" id="tempDisplay">72°F</span>
-                <span class="light-level" id="lightDisplay" title="Ambient light">💡 -- lux</span>
+                <span class="temp">72°F</span>
                 <button class="exit-btn" id="exitBtn" title="Exit Application">✕</button>
             </div>
         </div>
@@ -58,6 +73,8 @@
 
                 <!-- CarPlay Interface -->
                 <div class="carplay-interface" id="carplayInterface">
+                    <button class="back-btn carplay-back-btn" id="carplayBackBtn">←</button>
+                    
                     <div class="carplay-status">
                         <h2>CarPlay</h2>
                         <p id="carplayStatusText">Connect your iPhone to get started</p>
@@ -172,30 +189,9 @@
                         <div class="settings-section">
                             <h3 class="section-title">Display</h3>
                             <div class="setting-item">
-                                <label>Auto Brightness</label>
-                                <input type="checkbox" id="autoBrightness">
-                            </div>
-                            <div class="setting-item">
                                 <label>Default Brightness (%)</label>
                                 <input type="number" id="defaultBrightness" min="0" max="100" step="5">
                             </div>
-                            <div class="setting-item">
-                                <label>Current Light Level</label>
-                                <span id="lightLevelDisplay">-- lux</span>
-                            </div>
-                            <div class="setting-item">
-                                <label>Recommended Brightness</label>
-                                <span id="recommendedBrightness">--%</span>
-                            </div>
-                        </div>
-
-                        <div class="settings-section">
-                            <h3 class="section-title">CarPlay</h3>
-                            <div class="setting-item">
-                                <label>Debug Mode</label>
-                                <input type="checkbox" id="carplayDebugMode">
-                            </div>
-                            <p class="setting-description">When enabled, you must manually click "Connect Device" to start CarPlay. When disabled, CarPlay connects automatically when you open the app.</p>
                         </div>
 
                         <div class="settings-section">

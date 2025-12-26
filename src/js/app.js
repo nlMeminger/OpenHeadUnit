@@ -1,5 +1,5 @@
 import CarPlayManager from './carplay-manager.js';
-import { TouchAction } from '../carplay/index.js';
+
 console.log('CarPlay module script loading...');
 
 // Navigation elements
@@ -10,6 +10,37 @@ const settingsInterface = document.getElementById('settingsInterface');
 const appTiles = document.querySelectorAll('.app-tile');
 const backBtn = document.getElementById('backBtn');
 const settingsBackBtn = document.getElementById('settingsBackBtn');
+const carplayBackBtn = document.getElementById('carplayBackBtn');
+const navBtns = document.querySelectorAll('.nav-btn');
+
+// Quick Settings Dropdown
+const quickSettingsBtn = document.getElementById('quickSettingsBtn');
+const quickSettingsDropdown = document.getElementById('quickSettingsDropdown');
+const closeDropdownBtn = document.getElementById('closeDropdownBtn');
+
+quickSettingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    quickSettingsDropdown.classList.toggle('active');
+    quickSettingsBtn.classList.toggle('active');
+});
+
+closeDropdownBtn.addEventListener('click', () => {
+    quickSettingsDropdown.classList.remove('active');
+    quickSettingsBtn.classList.remove('active');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!quickSettingsDropdown.contains(e.target) && e.target !== quickSettingsBtn) {
+        quickSettingsDropdown.classList.remove('active');
+        quickSettingsBtn.classList.remove('active');
+    }
+});
+
+// Prevent dropdown from closing when clicking inside it
+quickSettingsDropdown.addEventListener('click', (e) => {
+    e.stopPropagation();
+});
 
 console.log('CarPlay interface element:', carplayInterface);
 
@@ -23,6 +54,57 @@ const connectionText = document.getElementById('connectionText');
 const statusDot = document.getElementById('statusDot');
 
 carplayManager.setVideoCanvas(carplayCanvas);
+
+// Check for CarPlay dongle on startup
+async function checkForDongle() {
+    try {
+        if (!navigator.usb) {
+            console.log('WebUSB not supported');
+            disableCarPlayButton();
+            return;
+        }
+
+        const devices = await navigator.usb.getDevices();
+        const carplayDevice = devices.find(d =>
+            (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521))
+        );
+
+        if (!carplayDevice) {
+            console.log('No CarPlay dongle found on startup');
+            disableCarPlayButton();
+        } else {
+            console.log('CarPlay dongle detected:', carplayDevice);
+        }
+    } catch (error) {
+        console.error('Error checking for dongle:', error);
+        disableCarPlayButton();
+    }
+}
+
+function disableCarPlayButton() {
+    // Disable the CarPlay tile
+    const carplayTile = document.querySelector('.app-tile[data-app="phone"]');
+    if (carplayTile) {
+        carplayTile.style.opacity = '0.5';
+        carplayTile.style.cursor = 'not-allowed';
+        carplayTile.style.pointerEvents = 'none';
+    }
+
+    // Disable the nav button
+    if (navBtns[3]) {
+        navBtns[3].style.opacity = '0.5';
+        navBtns[3].style.cursor = 'not-allowed';
+        navBtns[3].style.pointerEvents = 'none';
+    }
+
+    // Update CarPlay status
+    carplayStatusText.textContent = 'No CarPlay dongle detected';
+    connectCarPlayBtn.disabled = true;
+    connectCarPlayBtn.textContent = 'No Dongle Detected';
+}
+
+// Run the check on startup
+checkForDongle();
 
 // CarPlay event handlers
 carplayManager.on('connected', () => {
@@ -126,6 +208,7 @@ carplayCanvas.addEventListener('mousedown', async (e) => {
     touchStartX = x;
     touchStartY = y;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Down);
 });
 
@@ -136,6 +219,7 @@ carplayCanvas.addEventListener('mousemove', async (e) => {
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Move);
 });
 
@@ -147,6 +231,7 @@ carplayCanvas.addEventListener('mouseup', async (e) => {
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Up);
 });
 
@@ -159,6 +244,7 @@ carplayCanvas.addEventListener('mouseleave', async (e) => {
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Up);
 });
 
@@ -180,6 +266,7 @@ carplayCanvas.addEventListener('touchstart', async (e) => {
     touchStartX = x;
     touchStartY = y;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Down);
 });
 
@@ -192,6 +279,7 @@ carplayCanvas.addEventListener('touchmove', async (e) => {
     const x = (touch.clientX - rect.left) / rect.width;
     const y = (touch.clientY - rect.top) / rect.height;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Move);
 });
 
@@ -204,6 +292,7 @@ carplayCanvas.addEventListener('touchend', async (e) => {
     const x = (touch.clientX - rect.left) / rect.width;
     const y = (touch.clientY - rect.top) / rect.height;
 
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Up);
 });
 
@@ -215,6 +304,8 @@ carplayCanvas.addEventListener('touchcancel', async (e) => {
     const rect = carplayCanvas.getBoundingClientRect();
     const x = (touch.clientX - rect.left) / rect.width;
     const y = (touch.clientY - rect.top) / rect.height;
+
+    const { TouchAction } = await import('../carplay/index.js');
     await carplayManager.sendTouch(x, y, TouchAction.Up);
 });
 
@@ -224,6 +315,10 @@ function switchToMainUI() {
     carplayInterface.classList.remove('active');
     carplayInterface.classList.remove('fullscreen');
     homeScreen.style.display = 'grid';
+    
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[0].classList.add('active'); // Activate home button
 }
 
 // Function to switch back to CarPlay UI
@@ -235,11 +330,15 @@ function switchToCarPlayUI() {
     if (carplayCanvas.style.display === 'block') {
         carplayInterface.classList.add('fullscreen');
     }
+    
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[3].classList.add('active'); // Activate phone button
 }
 
 // App tile navigation
 appTiles.forEach(tile => {
-    tile.addEventListener('click', async () => {
+    tile.addEventListener('click', () => {
         const app = tile.getAttribute('data-app');
         console.log('App tile clicked:', app);
         homeScreen.style.display = 'none';
@@ -250,26 +349,6 @@ appTiles.forEach(tile => {
         } else if (app === 'phone') {
             console.log('Opening CarPlay interface');
             switchToCarPlayUI();
-
-            // Auto-connect unless debug mode is enabled
-            const settings = ipcRenderer.sendSync('get-settings');
-            const debugMode = settings.carplay?.debugMode || false;
-
-            if (!debugMode && !carplayManager.isConnected) {
-                console.log('Auto-connecting CarPlay (debug mode disabled)');
-                connectCarPlayBtn.disabled = true;
-                connectCarPlayBtn.textContent = 'Connecting...';
-                carplayStatusText.textContent = 'Auto-connecting device...';
-
-                try {
-                    await carplayManager.connect();
-                } catch (error) {
-                    console.error('Auto-connection error:', error);
-                    carplayStatusText.textContent = `Connection failed: ${error.message}`;
-                    connectCarPlayBtn.disabled = false;
-                    connectCarPlayBtn.textContent = 'Connect Device';
-                }
-            }
         } else if (app === 'settings') {
             console.log('Opening settings interface');
             settingsInterface.classList.add('active');
@@ -284,12 +363,68 @@ backBtn.addEventListener('click', () => {
     radioInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
     ipcRenderer.send('stop-radio');
+    
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[0].classList.add('active'); // Activate home button
 });
 
 settingsBackBtn.addEventListener('click', () => {
     console.log('Settings back button clicked');
     settingsInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
+    
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[0].classList.add('active'); // Activate home button
+});
+
+carplayBackBtn.addEventListener('click', () => {
+    console.log('CarPlay back button clicked');
+    carplayInterface.classList.remove('active');
+    carplayInterface.classList.remove('fullscreen');
+    homeScreen.style.display = 'grid';
+    
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[0].classList.add('active'); // Activate home button
+});
+
+// Bottom navigation bar
+navBtns.forEach((btn, index) => {
+    btn.addEventListener('click', () => {
+        // Remove active class from all nav buttons
+        navBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Hide all interfaces
+        homeScreen.style.display = 'none';
+        radioInterface.classList.remove('active');
+        carplayInterface.classList.remove('active');
+        carplayInterface.classList.remove('fullscreen');
+        settingsInterface.classList.remove('active');
+
+        // Show appropriate screen based on button index
+        switch(index) {
+            case 0: // Home
+                homeScreen.style.display = 'grid';
+                break;
+            case 1: // Navigation
+                homeScreen.style.display = 'grid';
+                // Could add navigation interface here
+                break;
+            case 2: // Media/Radio
+                radioInterface.classList.add('active');
+                break;
+            case 3: // Phone/CarPlay
+                switchToCarPlayUI();
+                break;
+            case 4: // Settings
+                settingsInterface.classList.add('active');
+                loadSettings();
+                break;
+        }
+    });
 });
 
 // Radio functionality
@@ -385,11 +520,7 @@ function loadSettings() {
     document.getElementById('autoGainControl').checked = settings.audio.microphoneSettings.autoGainControl;
 
     // Display settings
-    document.getElementById('autoBrightness').checked = settings.display.autoBrightness || false;
     document.getElementById('defaultBrightness').value = settings.display.brightness;
-
-    // CarPlay settings
-    document.getElementById('carplayDebugMode').checked = settings.carplay?.debugMode || false;
 
     // Load radio presets
     const presetsEditor = document.getElementById('presetsEditor');
@@ -417,9 +548,7 @@ function saveSettings() {
         'audio.microphoneSettings.echoCancellation': document.getElementById('echoCancellation').checked,
         'audio.microphoneSettings.noiseSuppression': document.getElementById('noiseSuppression').checked,
         'audio.microphoneSettings.autoGainControl': document.getElementById('autoGainControl').checked,
-        'display.brightness': parseInt(document.getElementById('defaultBrightness').value),
-        'display.autoBrightness': document.getElementById('autoBrightness').checked,
-        'carplay.debugMode': document.getElementById('carplayDebugMode').checked
+        'display.brightness': parseInt(document.getElementById('defaultBrightness').value)
     };
 
     // Get radio presets
@@ -479,62 +608,6 @@ document.getElementById('resetSettingsBtn').addEventListener('click', () => {
         statusDiv.textContent = 'Settings reset to current saved values. To reset to defaults, manually edit config.json';
         statusDiv.className = 'settings-status';
     }
-});
-
-// Temperature sensor update handler
-ipcRenderer.on('temperature-update', (event, temp) => {
-    const tempDisplay = document.getElementById('tempDisplay');
-    if (temp) {
-        tempDisplay.textContent = `${temp.fahrenheit}°F`;
-    } else {
-        tempDisplay.textContent = '--°F';
-    }
-});
-
-// Light sensor update handler
-ipcRenderer.on('light-level-update', (event, lightLevel) => {
-    const lightDisplay = document.getElementById('lightDisplay');
-    const lightLevelDisplay = document.getElementById('lightLevelDisplay');
-    const recommendedBrightness = document.getElementById('recommendedBrightness');
-
-    if (lightLevel) {
-        // Update status bar display
-        lightDisplay.textContent = `💡 ${Math.round(lightLevel.lux)} lux`;
-
-        // Update settings interface displays if they exist
-        if (lightLevelDisplay) {
-            lightLevelDisplay.textContent = `${Math.round(lightLevel.lux)} lux`;
-        }
-        if (recommendedBrightness) {
-            recommendedBrightness.textContent = `${lightLevel.brightness}%`;
-        }
-    } else {
-        lightDisplay.textContent = '💡 -- lux';
-        if (lightLevelDisplay) {
-            lightLevelDisplay.textContent = '-- lux';
-        }
-        if (recommendedBrightness) {
-            recommendedBrightness.textContent = '--%';
-        }
-    }
-});
-
-// Auto-brightness toggle handler
-document.getElementById('autoBrightness').addEventListener('change', (e) => {
-    ipcRenderer.sendSync('toggle-auto-brightness', e.target.checked);
-
-    const statusDiv = document.getElementById('settingsStatus');
-    if (e.target.checked) {
-        statusDiv.textContent = 'Auto-brightness enabled';
-    } else {
-        statusDiv.textContent = 'Auto-brightness disabled';
-    }
-    statusDiv.className = 'settings-status success';
-
-    setTimeout(() => {
-        statusDiv.textContent = '';
-        statusDiv.className = 'settings-status';
-    }, 3000);
 });
 
 console.log('CarPlay module script loaded successfully');
