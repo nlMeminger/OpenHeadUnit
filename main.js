@@ -266,3 +266,9 @@ ipcMain.on('exit-app', () => {
   stopRadio();
   app.quit();
 });
+
+// Notify renderer about settings updates
+ipcMain.on('notify-settings-updated', (event) => {
+  const settings = settingsManager.getAll();
+  mainWindow.webContents.send('settings-updated', settings);
+});

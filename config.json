@@ -4,6 +4,9 @@
     "height": 720,
     "fullscreen": false
   },
+  "debug": {
+    "enabled": false
+  },
   "audio": {
     "outputVolume": 50,
     "inputVolume": 50,
@@ -17,7 +20,10 @@
     }
   },
   "display": {
-    "brightness": 80
+    "brightness": 80,
+    "clockFormat": "12hr",
+    "temperatureUnit": "celsius",
+    "showSeconds": false
   },
   "radio": {
     "presets": [
@@ -50,6 +56,10 @@
   },
   "carplay": {
     "width": null,
-    "height": null
+    "height": null,
+    "fps": 30,
+    "dpi": 240,
+    "boxName": "nodePlay",
+    "hand": 0
   }
 }

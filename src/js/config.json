@@ -2,7 +2,7 @@
   "window": {
     "width": 1200,
     "height": 720,
-    "fullscreen": true
+    "fullscreen": false
   },
   "audio": {
     "outputVolume": 50,

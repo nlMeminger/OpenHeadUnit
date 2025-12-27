@@ -25,8 +25,8 @@ export const HandDriveType = {
 }
 
 export const DEFAULT_CONFIG = {
-  width: 800,
-  height: 640,
+  width: 1200,
+  height: 720,
   fps: 20,
   dpi: 160,
   format: 5,

@@ -24,17 +24,27 @@ class CarPlayManager extends EventEmitter {
       console.warn('Could not load settings, using defaults:', error);
     }
 
-    // Use window dimensions for CarPlay resolution, with config override if set
+    // Use window dimensions for CarPlay resolution if not specified in config
     const carplayWidth = settings?.carplay?.width || window.innerWidth;
     const carplayHeight = settings?.carplay?.height || window.innerHeight;
+    const carplayFps = settings?.carplay?.fps || 20;
+    const carplayDpi = settings?.carplay?.dpi || 160;
+    const carplayBoxName = settings?.carplay?.boxName || 'nodePlay';
+    const carplayHand = settings?.carplay?.hand !== undefined ? settings.carplay.hand : 0;
 
     this.config = {
       ...DEFAULT_CONFIG,
       width: carplayWidth,
       height: carplayHeight,
+      fps: carplayFps,
+      dpi: carplayDpi,
+      boxName: carplayBoxName,
+      hand: carplayHand
     };
 
     this.settings = settings;
+
+    console.log('CarPlay Manager initialized with config:', this.config);
   }
 
   async requestDevice() {

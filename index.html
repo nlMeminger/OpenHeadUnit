@@ -1,16 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
     <title>Car Infotainment System</title>
     <link rel="stylesheet" href="src/css/styles.css">
 </head>
+
 <body>
     <!-- Quick Settings Dropdown -->
     <div class="quick-settings-dropdown" id="quickSettingsDropdown">
         <div class="quick-settings-content">
             <div class="quick-settings-header">
+                <h3>Quick Settings</h3>
                 <button class="close-dropdown-btn" id="closeDropdownBtn">✕</button>
             </div>
             <div class="quick-setting-item">
@@ -34,7 +38,7 @@
         <div class="status-bar">
             <div class="clock" id="clock">00:00:00</div>
             <div class="controls">
-                <button class="quick-settings-btn" id="quickSettingsBtn">⚡</button>
+                <button class="quick-settings-btn" id="quickSettingsBtn">▼</button>
             </div>
             <div class="status-icons">
                 <span class="temp">72°F</span>
@@ -73,8 +77,10 @@
 
                 <!-- CarPlay Interface -->
                 <div class="carplay-interface" id="carplayInterface">
-                    <button class="back-btn carplay-back-btn" id="carplayBackBtn">←</button>
-                    
+                    <div class="carplay-quick-settings">
+                        <button class="quick-settings-btn carplay-qs-btn" id="carplayQuickSettingsBtn">▼</button>
+                    </div>
+
                     <div class="carplay-status">
                         <h2>CarPlay</h2>
                         <p id="carplayStatusText">Connect your iPhone to get started</p>
@@ -192,11 +198,62 @@
                                 <label>Default Brightness (%)</label>
                                 <input type="number" id="defaultBrightness" min="0" max="100" step="5">
                             </div>
+                            <div class="setting-item">
+                                <label>Clock Format</label>
+                                <select id="clockFormat">
+                                    <option value="12hr">12 Hour</option>
+                                    <option value="24hr">24 Hour</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label>Show Seconds</label>
+                                <input type="checkbox" id="showSeconds">
+                            </div>
+                            <div class="setting-item">
+                                <label>Temperature Unit</label>
+                                <select id="temperatureUnit">
+                                    <option value="fahrenheit">Fahrenheit (°F)</option>
+                                    <option value="celsius">Celsius (°C)</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="settings-section">
                             <h3 class="section-title">Radio Presets</h3>
                             <div class="presets-editor" id="presetsEditor">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">CarPlay</h3>
+                            <div class="setting-item">
+                                <label>Width (px)</label>
+                                <input type="number" id="carplayWidth" min="640" max="1920" step="10"
+                                    placeholder="Auto">
+                            </div>
+                            <div class="setting-item">
+                                <label>Height (px)</label>
+                                <input type="number" id="carplayHeight" min="480" max="1080" step="10"
+                                    placeholder="Auto">
+                            </div>
+                            <div class="setting-item">
+                                <label>FPS</label>
+                                <input type="number" id="carplayFps" min="10" max="60" step="1">
+                            </div>
+                            <div class="setting-item">
+                                <label>DPI</label>
+                                <input type="number" id="carplayDpi" min="72" max="320" step="10">
+                            </div>
+                            <div class="setting-item">
+                                <label>Box Name</label>
+                                <input type="text" id="carplayBoxName" maxlength="16" placeholder="nodePlay">
+                            </div>
+                            <div class="setting-item">
+                                <label>Driving Position</label>
+                                <select id="carplayHand">
+                                    <option value="0">Left Hand Drive (LHD)</option>
+                                    <option value="1">Right Hand Drive (RHD)</option>
+                                </select>
                             </div>
                         </div>
 
@@ -226,4 +283,5 @@
     <!-- ES6 module script for CarPlay and app functionality -->
     <script type="module" src="src/js/app.js"></script>
 </body>
+
 </html>

@@ -25,7 +25,6 @@ body {
     flex-direction: column;
 }
 
-/* Quick Settings Dropdown */
 .quick-settings-dropdown {
     position: fixed;
     top: 0;
@@ -302,17 +301,20 @@ input[type="range"]::-webkit-slider-thumb {
     flex-direction: column;
 }
 
-.carplay-back-btn {
+.carplay-quick-settings {
     position: absolute;
     top: 20px;
-    left: 20px;
+    right: 20px;
     z-index: 1001;
-    background: rgba(26, 26, 26, 0.9);
+}
+
+.carplay-qs-btn {
+    background: rgba(26, 26, 26, 0.9) !important;
     backdrop-filter: blur(10px);
 }
 
-.carplay-interface.fullscreen .carplay-back-btn {
-    background: rgba(0, 0, 0, 0.7);
+.carplay-interface.fullscreen .carplay-qs-btn {
+    background: rgba(0, 0, 0, 0.7) !important;
 }
 
 .carplay-interface.fullscreen .carplay-status {
@@ -442,7 +444,6 @@ input[type="range"]::-webkit-slider-thumb {
 .radio-interface {
     display: none;
     padding: 40px;
-    max-width: 600px;
     margin: 0 auto;
     position: absolute;
     top: 0;
@@ -622,7 +623,6 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .settings-content {
-    max-width: 700px;
     margin: 0 auto;
 }
 
@@ -799,4 +799,66 @@ input[type="range"]::-webkit-slider-thumb {
 .back-btn:hover {
     border-color: #00ff88;
     color: #00ff88;
+}
+.setting-item select {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    min-width: 150px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.setting-item select:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.setting-item select option {
+    background: #0a0a0a;
+    color: #fff;
+}
+
+/* Add these styles to your existing styles.css */
+
+.setting-item select {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    min-width: 150px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.setting-item select:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.setting-item select option {
+    background: #0a0a0a;
+    color: #fff;
+}
+
+.setting-item input[type="text"] {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    width: 150px;
+    font-size: 14px;
+}
+
+.setting-item input[type="text"]:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.setting-item input[type="text"]::placeholder {
+    color: #666;
 }

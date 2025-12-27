@@ -6,7 +6,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+const CONFIG_PATH = path.join(__dirname, '../../config.json');
 
 class SettingsManager {
   constructor() {
@@ -43,7 +43,10 @@ class SettingsManager {
         }
       },
       display: {
-        brightness: 80
+        brightness: 80,
+        clockFormat: '24hr',
+        temperatureUnit: 'fahrenheit',
+        showSeconds: true
       },
       radio: {
         presets: [
@@ -58,7 +61,11 @@ class SettingsManager {
       },
       carplay: {
         width: null,
-        height: null
+        height: null,
+        fps: 20,
+        dpi: 160,
+        boxName: 'nodePlay',
+        hand: 0 // 0 = LHD (Left Hand Drive), 1 = RHD (Right Hand Drive)
       }
     };
   }
