@@ -1,22 +1,42 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import os from 'os';
+import yaml from 'js-yaml';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const CONFIG_PATH = path.join(__dirname, '../../config.json');
+// Linux-specific config path: ~/.openheadunit/config/config.yaml
+const CONFIG_DIR = path.join(os.homedir(), '.openheadunit', 'config');
+const CONFIG_PATH = path.join(CONFIG_DIR, 'config.yaml');
 
 class SettingsManager {
   constructor() {
+    this.ensureConfigDirectory();
     this.config = this.loadConfig();
+  }
+
+  ensureConfigDirectory() {
+    try {
+      if (!fs.existsSync(CONFIG_DIR)) {
+        fs.mkdirSync(CONFIG_DIR, { recursive: true });
+        console.log('Created config directory:', CONFIG_DIR);
+      }
+    } catch (error) {
+      console.error('Failed to create config directory:', error);
+    }
   }
 
   loadConfig() {
     try {
-      const configData = fs.readFileSync(CONFIG_PATH, 'utf8');
-      return JSON.parse(configData);
+      if (fs.existsSync(CONFIG_PATH)) {
+        const fileContents = fs.readFileSync(CONFIG_PATH, 'utf8');
+        const config = yaml.load(fileContents);
+        console.log('Config loaded from:', CONFIG_PATH);
+        return config;
+      } else {
+        console.log('No existing config found, using defaults');
+        const defaultConfig = this.getDefaultConfig();
+        this.saveConfigInternal(defaultConfig);
+        return defaultConfig;
+      }
     } catch (error) {
       console.error('Failed to load config:', error);
       return this.getDefaultConfig();
@@ -43,10 +63,7 @@ class SettingsManager {
         }
       },
       display: {
-        brightness: 80,
-        clockFormat: '24hr',
-        temperatureUnit: 'fahrenheit',
-        showSeconds: true
+        brightness: 80
       },
       radio: {
         presets: [
@@ -61,22 +78,41 @@ class SettingsManager {
       },
       carplay: {
         width: null,
-        height: null,
-        fps: 20,
-        dpi: 160,
-        boxName: 'nodePlay',
-        hand: 0 // 0 = LHD (Left Hand Drive), 1 = RHD (Right Hand Drive)
+        height: null
       }
     };
+  }
+
+  saveConfigInternal(config) {
+    try {
+      this.ensureConfigDirectory();
+      const yamlStr = yaml.dump(config, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true
+      });
+      fs.writeFileSync(CONFIG_PATH, yamlStr, 'utf8');
+      return true;
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      return false;
+    }
   }
 
   saveConfig() {
     try {
       console.log('Saving config to:', CONFIG_PATH);
-      const jsonString = JSON.stringify(this.config, null, 2);
-      fs.writeFileSync(CONFIG_PATH, jsonString, 'utf8');
-      console.log('Config saved successfully');
-      return true;
+      const result = this.saveConfigInternal(this.config);
+      
+      if (result) {
+        console.log('Config saved successfully');
+        
+        // Verify the save
+        const readBack = yaml.load(fs.readFileSync(CONFIG_PATH, 'utf8'));
+        console.log('Verified saved config');
+      }
+      
+      return result;
     } catch (error) {
       console.error('Failed to save config:', error);
       console.error('Error details:', error.message);
@@ -127,8 +163,11 @@ class SettingsManager {
     }
     const result = this.saveConfig();
     console.log('Save result:', result);
-    console.log('Config after save:', this.config);
     return result;
+  }
+
+  getConfigPath() {
+    return CONFIG_PATH;
   }
 }
 
