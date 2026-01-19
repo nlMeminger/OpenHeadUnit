@@ -10,3 +10,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
   getMusicFiles: (folderPath) => ipcRenderer.invoke('get-music-files', folderPath)
 });
+

@@ -4,9 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: blob:;">
     <title>Car Infotainment System</title>
     <link rel="stylesheet" href="src/css/styles.css">
+    <!-- jsmediatags for reading audio metadata -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 </head>
 
 <body>
@@ -149,6 +151,91 @@
                     </div>
                 </div>
 
+                <!-- Music Interface -->
+                <div class="music-interface" id="musicInterface">
+                    <button class="back-btn" id="musicBackBtn">←</button>
+
+                    <div class="music-content">
+                        <!-- Album Art & Now Playing -->
+                        <div class="music-player-main">
+                            <button class="toggle-sidebar-btn" id="toggleSidebarBtn">☰</button>
+
+                            <div class="album-art-container">
+                                <img id="albumArt" src="" alt="Album Art" class="album-art">
+                                <div class="album-art-placeholder">🎵</div>
+                            </div>
+
+                            <div class="now-playing-info">
+                                <div class="track-title" id="trackTitle">No track selected</div>
+                                <div class="track-artist" id="trackArtist">—</div>
+                                <div class="track-album" id="trackAlbum">—</div>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="progress-container">
+                                <span class="time-display" id="currentTime">0:00</span>
+                                <div class="progress-bar" id="progressBar">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                    <div class="progress-handle" id="progressHandle"></div>
+                                </div>
+                                <span class="time-display" id="totalTime">0:00</span>
+                            </div>
+
+                            <!-- Playback Controls -->
+                            <div class="playback-controls">
+                                <button class="control-btn" id="prevBtn">⏮</button>
+                                <button class="control-btn play-btn" id="playBtn">▶</button>
+                                <button class="control-btn" id="nextBtn">⏭</button>
+                                <button class="control-btn" id="shuffleBtn">🔀</button>
+                                <button class="control-btn" id="repeatBtn">🔁</button>
+                            </div>
+
+                            <!-- Volume Control -->
+                            <div class="volume-container">
+                                <span class="volume-icon">🔊</span>
+                                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100"
+                                    value="70">
+                                <span class="volume-value" id="volumeValue">70%</span>
+                            </div>
+                        </div>
+
+                        <!-- Playlist Sidebar -->
+                        <div class="music-sidebar">
+                            <div class="sidebar-header">
+                                <h3>Library</h3>
+                                <button class="folder-select-btn" id="folderSelectBtn">📁 Select</button>
+                            </div>
+
+                            <div class="music-folder-display" id="musicFolderPath">
+                                No folder selected
+                            </div>
+
+                            <div class="sidebar-controls">
+                                <div class="sort-controls">
+                                    <label>Sort:</label>
+                                    <select class="sort-select" id="sortSelect">
+                                        <option value="title">Title</option>
+                                        <option value="artist">Artist</option>
+                                        <option value="album">Album</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="playlist-stats" id="playlistStats">
+                                <span>0 tracks</span>
+                            </div>
+
+                            <div class="playlist-container" id="playlistContainer">
+                                <div class="playlist-empty">
+                                    <div class="empty-icon">🎵</div>
+                                    <p>No music files found</p>
+                                    <p class="empty-hint">Select a folder with audio files</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Settings Interface -->
                 <div class="settings-interface" id="settingsInterface">
                     <button class="back-btn" id="settingsBackBtn">←</button>
@@ -279,6 +366,12 @@
 
     <!-- Non-module script for basic controls -->
     <script src="src/js/controls.js"></script>
+
+    <!-- Music Player -->
+    <script src="src/js/music-player.js"></script>
+
+    <!-- App Integration -->
+    <script src="src/js/app-integration.js"></script>
 
     <!-- ES6 module script for CarPlay and app functionality -->
     <script type="module" src="src/js/app.js"></script>

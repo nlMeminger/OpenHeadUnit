@@ -9,6 +9,7 @@ class MusicPlayer {
     this.repeatMode = 0; // 0: off, 1: all, 2: one
     this.musicFolder = null;
     this.folderHandle = null;
+    this.shouldAutoPlay = false;
 
     this.initializeElements();
     this.attachEventListeners();
@@ -47,10 +48,15 @@ class MusicPlayer {
     this.sortSelect = document.getElementById('sortSelect');
     this.toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     this.musicContent = document.querySelector('.music-content');
+    this.musicFolderPath = document.getElementById('musicFolderPath');
 
     // State
     this.sortBy = 'title';
     this.sidebarVisible = true;
+    this.viewMode = 'flat'; // 'flat', 'artist', 'album'
+    this.currentArtist = null;
+    this.currentAlbum = null;
+    this.viewStack = []; // For breadcrumb navigation
   }
 
   attachEventListeners() {
@@ -108,6 +114,11 @@ class MusicPlayer {
         await this.scanMusicFolderElectron(folderPath);
       } else {
         // Fallback to web File System Access API (for browser testing)
+        if (!window.showDirectoryPicker) {
+          alert('File System Access API is not supported in this browser. Please use Chrome, Edge, or run in Electron.');
+          return;
+        }
+
         const dirHandle = await window.showDirectoryPicker();
         this.folderHandle = dirHandle;
         this.musicFolder = dirHandle.name;
@@ -184,12 +195,6 @@ class MusicPlayer {
     }
   }
 
-  async tryDefaultFolder() {
-    // Can't automatically access ~/Music without user permission
-    // Show default message
-    this.musicFolderPath.textContent = '~/Music (not selected)';
-  }
-
   openDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('MusicPlayerDB', 1);
@@ -211,9 +216,12 @@ class MusicPlayer {
     const audioExtensions = ['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac'];
 
     try {
+      console.log('Scanning folder for audio files...');
       const entries = await this.getAllFiles(dirHandle, audioExtensions);
       
-      // Process each file
+      console.log(`Found ${entries.length} audio files`);
+      
+      // Build inventory with basic metadata from path
       for (const entry of entries) {
         const track = {
           name: entry.file.name,
@@ -221,20 +229,31 @@ class MusicPlayer {
           fileHandle: entry.fileHandle,
           file: entry.file,
           duration: null,
-          metadata: null
+          metadata: null,
+          metadataLoaded: false
         };
 
-        // Extract metadata
-        await this.extractMetadata(track);
+        // Use basic info from path for initial display
+        track.metadata = this.getBasicMetadata(track.name, track.path);
 
         this.playlist.push(track);
       }
 
-      // Update UI
+      console.log('Inventory built with', this.playlist.length, 'tracks');
+
+      // Update UI with basic info
       this.renderPlaylist();
       this.updateStats();
 
-      // Auto-play first track if playlist not empty
+      // Now load all metadata in the background
+      console.log('Loading metadata for all tracks...');
+      await this.loadAllMetadata();
+      
+      // Update UI with full metadata
+      this.renderPlaylist();
+      this.updateStats();
+
+      // Auto-load first track if playlist not empty
       if (this.playlist.length > 0 && this.currentIndex === -1) {
         this.loadTrack(0);
       }
@@ -243,10 +262,30 @@ class MusicPlayer {
     }
   }
 
+  async loadAllMetadata() {
+    // Load metadata for all tracks
+    let loaded = 0;
+    for (const track of this.playlist) {
+      if (!track.metadataLoaded && track.file) {
+        await this.extractMetadata(track);
+        track.metadataLoaded = true;
+        loaded++;
+        
+        // Update UI every 10 tracks to show progress
+        if (loaded % 10 === 0) {
+          console.log(`Loaded metadata for ${loaded}/${this.playlist.length} tracks`);
+          this.updateStats();
+        }
+      }
+    }
+    console.log(`Metadata loading complete: ${loaded} tracks`);
+  }
+
   async scanMusicFolderElectron(folderPath) {
     this.playlist = [];
     
     try {
+      console.log('Scanning Electron folder for audio files...');
       // Get files from Electron API
       const files = await window.electronAPI.getMusicFiles(folderPath);
       
@@ -256,26 +295,36 @@ class MusicPlayer {
         return;
       }
 
-      // Process each file
+      console.log(`Found ${files.length} audio files`);
+
+      // Build quick inventory
       for (const filePath of files) {
         const fileName = filePath.split('/').pop().split('\\').pop();
+        const relativePath = filePath.replace(folderPath, '').replace(/^[\/\\]/, '');
+        
         const track = {
           name: fileName,
-          path: filePath,
+          path: relativePath,
           filePath: filePath,
           duration: null,
-          metadata: null
+          metadata: null,
+          metadataLoaded: false
         };
 
-        // Extract metadata (will be loaded when played)
-        track.metadata = this.getBasicMetadata(fileName);
+        // Extract basic metadata from path
+        track.metadata = this.getBasicMetadata(fileName, relativePath);
 
         this.playlist.push(track);
       }
 
-      // Update UI
+      console.log('Inventory built with', this.playlist.length, 'tracks');
+
+      // Update UI with basic info
       this.renderPlaylist();
       this.updateStats();
+
+      // Note: For Electron, we can't pre-load metadata from file paths
+      // Metadata will be loaded when each track is played
 
       // Auto-load first track
       if (this.playlist.length > 0 && this.currentIndex === -1) {
@@ -289,6 +338,11 @@ class MusicPlayer {
 
   async getAllFiles(dirHandle, extensions, path = '', results = []) {
     for await (const entry of dirHandle.values()) {
+      // Skip hidden files and macOS metadata files
+      if (entry.name.startsWith('.') || entry.name.startsWith('._')) {
+        continue;
+      }
+
       const entryPath = path ? `${path}/${entry.name}` : entry.name;
 
       if (entry.kind === 'file') {
@@ -309,45 +363,108 @@ class MusicPlayer {
     try {
       // Use jsmediatags library if available, otherwise use basic file info
       if (window.jsmediatags) {
+        console.log('Extracting metadata for:', track.name);
         await new Promise((resolve) => {
           window.jsmediatags.read(track.file, {
             onSuccess: (tag) => {
+              console.log('Metadata found:', tag.tags);
               track.metadata = {
                 title: tag.tags.title || track.name,
                 artist: tag.tags.artist || 'Unknown Artist',
                 album: tag.tags.album || 'Unknown Album',
                 picture: tag.tags.picture
               };
+              console.log('Stored metadata:', track.metadata);
               resolve();
             },
-            onError: () => {
+            onError: (error) => {
+              console.log('Metadata read error for', track.name, ':', error);
               track.metadata = this.getBasicMetadata(track.name);
               resolve();
             }
           });
         });
       } else {
+        console.warn('jsmediatags library not available');
         track.metadata = this.getBasicMetadata(track.name);
       }
     } catch (error) {
+      console.error('Error extracting metadata:', error);
       track.metadata = this.getBasicMetadata(track.name);
     }
   }
 
-  getBasicMetadata(filename) {
-    // Extract basic info from filename
-    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+  getBasicMetadata(filename, path = '') {
+    // Extract basic info from filename and path structure
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
+    
+    // Try to extract from path: Artist/Album/Track.mp3
+    let artist = 'Unknown Artist';
+    let album = 'Unknown Album';
+    let title = nameWithoutExt;
+    
+    if (path) {
+      const pathParts = path.split('/');
+      
+      // If we have at least Artist/Album/Track structure
+      if (pathParts.length >= 3) {
+        artist = pathParts[pathParts.length - 3];
+        album = pathParts[pathParts.length - 2];
+      } else if (pathParts.length === 2) {
+        // Just Album/Track
+        album = pathParts[pathParts.length - 2];
+      }
+      
+      // Clean up track number from filename if present (e.g., "01 - Song Name.mp3")
+      const trackMatch = nameWithoutExt.match(/^\d+\s*[-_.]\s*(.+)$/);
+      if (trackMatch) {
+        title = trackMatch[1];
+      }
+    }
+    
     return {
-      title: nameWithoutExt,
-      artist: 'Unknown Artist',
-      album: 'Unknown Album',
+      title: title,
+      artist: artist,
+      album: album,
       picture: null
     };
   }
 
   changeSortOrder(sortBy) {
     this.sortBy = sortBy;
+    
+    // Set view mode based on sort
+    if (sortBy === 'artist') {
+      this.viewMode = 'artist';
+      this.currentArtist = null;
+      this.currentAlbum = null;
+    } else if (sortBy === 'album') {
+      this.viewMode = 'album';
+      this.currentArtist = null;
+      this.currentAlbum = null;
+    } else {
+      this.viewMode = 'flat';
+    }
+    
+    this.viewStack = [];
+    
+    // Remember the currently playing track
+    let currentTrack = null;
+    if (this.currentIndex >= 0 && this.currentIndex < this.playlist.length) {
+      currentTrack = this.playlist[this.currentIndex];
+    }
+    
+    // Sort the playlist
     this.sortPlaylist();
+    
+    // Find the new index of the currently playing track
+    if (currentTrack) {
+      this.currentIndex = this.playlist.findIndex(track => 
+        track.file === currentTrack.file || track.filePath === currentTrack.filePath
+      );
+    }
+    
+    // Re-render the playlist with new view mode
     this.renderPlaylist();
   }
 
@@ -357,35 +474,72 @@ class MusicPlayer {
       
       switch(this.sortBy) {
         case 'artist':
-          aVal = (a.metadata?.artist || 'Unknown Artist').toLowerCase();
-          bVal = (b.metadata?.artist || 'Unknown Artist').toLowerCase();
-          // Secondary sort by album, then title
-          if (aVal === bVal) {
-            const aAlbum = (a.metadata?.album || '').toLowerCase();
-            const bAlbum = (b.metadata?.album || '').toLowerCase();
-            if (aAlbum === bAlbum) {
-              const aTitle = (a.metadata?.title || a.name).toLowerCase();
-              const bTitle = (b.metadata?.title || b.name).toLowerCase();
-              return aTitle.localeCompare(bTitle);
+          // Use the file path to determine artist/album order (folder structure)
+          // Extract artist from path: Artist/Album/Track.mp3
+          const aPath = a.path || a.name;
+          const bPath = b.path || b.name;
+          const aPathParts = aPath.split('/');
+          const bPathParts = bPath.split('/');
+          
+          if (aPathParts.length >= 3 && bPathParts.length >= 3) {
+            // Compare artist (folder before album folder)
+            const aArtist = aPathParts[aPathParts.length - 3].toLowerCase();
+            const bArtist = bPathParts[bPathParts.length - 3].toLowerCase();
+            
+            if (aArtist !== bArtist) {
+              return aArtist.localeCompare(bArtist);
             }
-            return aAlbum.localeCompare(bAlbum);
+            
+            // Same artist, compare album
+            const aAlbum = aPathParts[aPathParts.length - 2].toLowerCase();
+            const bAlbum = bPathParts[bPathParts.length - 2].toLowerCase();
+            
+            if (aAlbum !== bAlbum) {
+              return aAlbum.localeCompare(bAlbum);
+            }
+            
+            // Same album, compare filename
+            const aFile = aPathParts[aPathParts.length - 1].toLowerCase();
+            const bFile = bPathParts[bPathParts.length - 1].toLowerCase();
+            return aFile.localeCompare(bFile);
           }
-          break;
+          
+          // Fallback to full path comparison
+          return aPath.toLowerCase().localeCompare(bPath.toLowerCase());
+          
         case 'album':
-          aVal = (a.metadata?.album || 'Unknown Album').toLowerCase();
-          bVal = (b.metadata?.album || 'Unknown Album').toLowerCase();
-          // Secondary sort by title
-          if (aVal === bVal) {
-            const aTitle = (a.metadata?.title || a.name).toLowerCase();
-            const bTitle = (b.metadata?.title || b.name).toLowerCase();
-            return aTitle.localeCompare(bTitle);
+          // Use the file path to determine album order (folder structure)
+          const aAlbumPath = a.path || a.name;
+          const bAlbumPath = b.path || b.name;
+          const aAlbumParts = aAlbumPath.split('/');
+          const bAlbumParts = bAlbumPath.split('/');
+          
+          if (aAlbumParts.length >= 2 && bAlbumParts.length >= 2) {
+            // Compare album (parent folder)
+            const aAlbumFolder = aAlbumParts[aAlbumParts.length - 2].toLowerCase();
+            const bAlbumFolder = bAlbumParts[bAlbumParts.length - 2].toLowerCase();
+            
+            if (aAlbumFolder !== bAlbumFolder) {
+              return aAlbumFolder.localeCompare(bAlbumFolder);
+            }
+            
+            // Same album, compare filename
+            const aFileName = aAlbumParts[aAlbumParts.length - 1].toLowerCase();
+            const bFileName = bAlbumParts[bAlbumParts.length - 1].toLowerCase();
+            return aFileName.localeCompare(bFileName);
           }
-          break;
+          
+          // Fallback to full path comparison
+          return aAlbumPath.toLowerCase().localeCompare(bAlbumPath.toLowerCase());
+          
         case 'title':
-        default:
-          aVal = (a.metadata?.title || a.name).toLowerCase();
-          bVal = (b.metadata?.title || b.name).toLowerCase();
+          // Sort by filename only
+          aVal = (a.name || a.path.split('/').pop()).toLowerCase();
+          bVal = (b.name || b.path.split('/').pop()).toLowerCase();
           break;
+          
+        default:
+          return 0;
       }
       
       return aVal.localeCompare(bVal);
@@ -418,62 +572,335 @@ class MusicPlayer {
       return;
     }
 
-    // Apply current sort order
-    this.sortPlaylist();
+    // Render based on view mode
+    if (this.viewMode === 'artist') {
+      this.renderArtistView();
+    } else if (this.viewMode === 'album') {
+      this.renderAlbumView();
+    } else {
+      this.renderFlatView();
+    }
+  }
 
+  renderFlatView() {
+    // Show all tracks in a flat list
     this.playlist.forEach((track, index) => {
-      const item = document.createElement('div');
-      item.className = 'track-item';
-      if (index === this.currentIndex) {
-        item.classList.add('active');
-        if (this.isPlaying) item.classList.add('playing');
-      }
-
-      const thumbnail = document.createElement('div');
-      thumbnail.className = 'track-thumbnail';
-      
-      if (track.metadata?.picture) {
-        const { data, format } = track.metadata.picture;
-        const base64 = this.arrayBufferToBase64(data);
-        const img = document.createElement('img');
-        img.src = `data:${format};base64,${base64}`;
-        thumbnail.appendChild(img);
-      } else {
-        thumbnail.textContent = '🎵';
-      }
-
-      const info = document.createElement('div');
-      info.className = 'track-info';
-      
-      const name = document.createElement('div');
-      name.className = 'track-name';
-      name.textContent = track.metadata?.title || track.name;
-
-      const details = document.createElement('div');
-      details.className = 'track-details';
-      details.textContent = track.metadata?.artist || 'Unknown Artist';
-
-      info.appendChild(name);
-      info.appendChild(details);
-
-      const duration = document.createElement('div');
-      duration.className = 'track-duration';
-      duration.textContent = track.duration ? this.formatTime(track.duration) : '';
-
-      item.appendChild(thumbnail);
-      item.appendChild(info);
-      item.appendChild(duration);
-
-      item.addEventListener('click', () => {
-        this.loadTrack(index);
-        // Auto-play when clicking a track
-        if (!this.isPlaying) {
-          setTimeout(() => this.togglePlay(), 100);
-        }
-      });
-
+      const item = this.createTrackElement(track, index);
       this.playlistContainer.appendChild(item);
     });
+  }
+
+  renderArtistView() {
+    if (this.currentArtist && this.currentAlbum) {
+      // Show tracks for this album
+      this.renderBreadcrumb();
+      const tracks = this.playlist.filter(t => 
+        (t.metadata?.artist || 'Unknown Artist') === this.currentArtist &&
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+      );
+      tracks.forEach((track, idx) => {
+        const actualIndex = this.playlist.indexOf(track);
+        const item = this.createTrackElement(track, actualIndex);
+        this.playlistContainer.appendChild(item);
+      });
+    } else if (this.currentArtist) {
+      // Show albums for this artist
+      this.renderBreadcrumb();
+      const albums = this.getAlbumsForArtist(this.currentArtist);
+      albums.forEach(album => {
+        const item = this.createAlbumElement(album, this.currentArtist);
+        this.playlistContainer.appendChild(item);
+      });
+    } else {
+      // Show all artists
+      const artists = this.getAllArtists();
+      artists.forEach(artist => {
+        const item = this.createArtistElement(artist);
+        this.playlistContainer.appendChild(item);
+      });
+    }
+  }
+
+  renderAlbumView() {
+    if (this.currentAlbum) {
+      // Show tracks for this album
+      this.renderBreadcrumb();
+      const tracks = this.playlist.filter(t => 
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+      );
+      tracks.forEach((track, idx) => {
+        const actualIndex = this.playlist.indexOf(track);
+        const item = this.createTrackElement(track, actualIndex);
+        this.playlistContainer.appendChild(item);
+      });
+    } else {
+      // Show all albums grouped by artist
+      const albums = this.getAllAlbums();
+      albums.forEach(albumInfo => {
+        const item = this.createAlbumGroupElement(albumInfo);
+        this.playlistContainer.appendChild(item);
+      });
+    }
+  }
+
+  renderBreadcrumb() {
+    const breadcrumb = document.createElement('div');
+    breadcrumb.className = 'playlist-breadcrumb';
+    
+    const backBtn = document.createElement('button');
+    backBtn.className = 'breadcrumb-back';
+    backBtn.textContent = '← Back';
+    backBtn.addEventListener('click', () => this.navigateBack());
+    
+    let path = '';
+    if (this.viewMode === 'artist') {
+      path = this.currentArtist;
+      if (this.currentAlbum) {
+        path += ` / ${this.currentAlbum}`;
+      }
+    } else if (this.viewMode === 'album') {
+      path = this.currentAlbum;
+    }
+    
+    const pathText = document.createElement('span');
+    pathText.className = 'breadcrumb-path';
+    pathText.textContent = path;
+    
+    breadcrumb.appendChild(backBtn);
+    breadcrumb.appendChild(pathText);
+    this.playlistContainer.appendChild(breadcrumb);
+  }
+
+  navigateBack() {
+    if (this.currentAlbum) {
+      this.currentAlbum = null;
+    } else if (this.currentArtist) {
+      this.currentArtist = null;
+    }
+    this.renderPlaylist();
+  }
+
+  getAllArtists() {
+    const artistMap = new Map();
+    this.playlist.forEach(track => {
+      const artist = track.metadata?.artist || 'Unknown Artist';
+      if (!artistMap.has(artist)) {
+        artistMap.set(artist, { name: artist, trackCount: 0 });
+      }
+      artistMap.get(artist).trackCount++;
+    });
+    return Array.from(artistMap.values()).sort((a, b) => 
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+    );
+  }
+
+  getAlbumsForArtist(artist) {
+    const albumMap = new Map();
+    this.playlist.forEach(track => {
+      if ((track.metadata?.artist || 'Unknown Artist') === artist) {
+        const album = track.metadata?.album || 'Unknown Album';
+        if (!albumMap.has(album)) {
+          albumMap.set(album, { name: album, trackCount: 0 });
+        }
+        albumMap.get(album).trackCount++;
+      }
+    });
+    return Array.from(albumMap.values()).sort((a, b) => 
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+    );
+  }
+
+  getAllAlbums() {
+    const albumMap = new Map();
+    this.playlist.forEach(track => {
+      const album = track.metadata?.album || 'Unknown Album';
+      const artist = track.metadata?.artist || 'Unknown Artist';
+      const key = `${artist}|||${album}`;
+      if (!albumMap.has(key)) {
+        albumMap.set(key, { album, artist, trackCount: 0 });
+      }
+      albumMap.get(key).trackCount++;
+    });
+    return Array.from(albumMap.values()).sort((a, b) => {
+      const albumCompare = a.album.toLowerCase().localeCompare(b.album.toLowerCase());
+      if (albumCompare !== 0) return albumCompare;
+      return a.artist.toLowerCase().localeCompare(b.artist.toLowerCase());
+    });
+  }
+
+  createArtistElement(artistInfo) {
+    const item = document.createElement('div');
+    item.className = 'group-item artist-item';
+    
+    const icon = document.createElement('div');
+    icon.className = 'group-icon';
+    icon.textContent = '👤';
+    
+    const info = document.createElement('div');
+    info.className = 'group-info';
+    
+    const name = document.createElement('div');
+    name.className = 'group-name';
+    name.textContent = artistInfo.name;
+    
+    const count = document.createElement('div');
+    count.className = 'group-count';
+    count.textContent = `${artistInfo.trackCount} track${artistInfo.trackCount !== 1 ? 's' : ''}`;
+    
+    info.appendChild(name);
+    info.appendChild(count);
+    
+    const arrow = document.createElement('div');
+    arrow.className = 'group-arrow';
+    arrow.textContent = '›';
+    
+    item.appendChild(icon);
+    item.appendChild(info);
+    item.appendChild(arrow);
+    
+    item.addEventListener('click', () => {
+      this.currentArtist = artistInfo.name;
+      this.renderPlaylist();
+    });
+    
+    return item;
+  }
+
+  createAlbumElement(albumInfo, artist) {
+    const item = document.createElement('div');
+    item.className = 'group-item album-item';
+    
+    const icon = document.createElement('div');
+    icon.className = 'group-icon';
+    icon.textContent = '💿';
+    
+    const info = document.createElement('div');
+    info.className = 'group-info';
+    
+    const name = document.createElement('div');
+    name.className = 'group-name';
+    name.textContent = albumInfo.name;
+    
+    const count = document.createElement('div');
+    count.className = 'group-count';
+    count.textContent = `${albumInfo.trackCount} track${albumInfo.trackCount !== 1 ? 's' : ''}`;
+    
+    info.appendChild(name);
+    info.appendChild(count);
+    
+    const arrow = document.createElement('div');
+    arrow.className = 'group-arrow';
+    arrow.textContent = '›';
+    
+    item.appendChild(icon);
+    item.appendChild(info);
+    item.appendChild(arrow);
+    
+    item.addEventListener('click', () => {
+      this.currentAlbum = albumInfo.name;
+      this.renderPlaylist();
+    });
+    
+    return item;
+  }
+
+  createAlbumGroupElement(albumInfo) {
+    const item = document.createElement('div');
+    item.className = 'group-item album-group-item';
+    
+    const icon = document.createElement('div');
+    icon.className = 'group-icon';
+    icon.textContent = '💿';
+    
+    const info = document.createElement('div');
+    info.className = 'group-info';
+    
+    const name = document.createElement('div');
+    name.className = 'group-name';
+    name.textContent = albumInfo.album;
+    
+    const artist = document.createElement('div');
+    artist.className = 'group-subtext';
+    artist.textContent = albumInfo.artist;
+    
+    const count = document.createElement('div');
+    count.className = 'group-count';
+    count.textContent = `${albumInfo.trackCount} track${albumInfo.trackCount !== 1 ? 's' : ''}`;
+    
+    info.appendChild(name);
+    info.appendChild(artist);
+    info.appendChild(count);
+    
+    const arrow = document.createElement('div');
+    arrow.className = 'group-arrow';
+    arrow.textContent = '›';
+    
+    item.appendChild(icon);
+    item.appendChild(info);
+    item.appendChild(arrow);
+    
+    item.addEventListener('click', () => {
+      this.currentAlbum = albumInfo.album;
+      this.renderPlaylist();
+    });
+    
+    return item;
+  }
+
+  createTrackElement(track, index) {
+    const item = document.createElement('div');
+    item.className = 'track-item';
+    if (index === this.currentIndex) {
+      item.classList.add('active');
+      if (this.isPlaying) item.classList.add('playing');
+    }
+
+    const thumbnail = document.createElement('div');
+    thumbnail.className = 'track-thumbnail';
+    
+    if (track.metadata?.picture) {
+      const { data, format } = track.metadata.picture;
+      const base64 = this.arrayBufferToBase64(data);
+      const img = document.createElement('img');
+      img.src = `data:${format};base64,${base64}`;
+      thumbnail.appendChild(img);
+    } else {
+      thumbnail.textContent = '🎵';
+    }
+
+    const info = document.createElement('div');
+    info.className = 'track-info';
+    
+    const name = document.createElement('div');
+    name.className = 'track-name';
+    name.textContent = track.metadata?.title || track.name;
+
+    const details = document.createElement('div');
+    details.className = 'track-details';
+    if (this.viewMode === 'flat' || this.viewMode === 'album') {
+      details.textContent = track.metadata?.artist || 'Unknown Artist';
+    } else {
+      details.textContent = track.metadata?.album || 'Unknown Album';
+    }
+
+    info.appendChild(name);
+    info.appendChild(details);
+
+    const duration = document.createElement('div');
+    duration.className = 'track-duration';
+    duration.textContent = track.duration ? this.formatTime(track.duration) : '';
+
+    item.appendChild(thumbnail);
+    item.appendChild(info);
+    item.appendChild(duration);
+
+    item.addEventListener('click', async () => {
+      // Set flag to auto-play when track loads
+      this.shouldAutoPlay = true;
+      await this.loadTrack(index);
+    });
+
+    return item;
   }
 
   updateStats() {
@@ -488,10 +915,25 @@ class MusicPlayer {
   async loadTrack(index) {
     if (index < 0 || index >= this.playlist.length) return;
 
+    const wasPlaying = this.isPlaying;
     this.currentIndex = index;
     const track = this.playlist[index];
 
+    console.log('Loading track:', track.name);
+    console.log('Was playing:', wasPlaying);
+    console.log('Should auto-play:', this.shouldAutoPlay);
+
     try {
+      // Load full metadata if not already loaded
+      if (!track.metadataLoaded && track.file) {
+        console.log('Loading full metadata for:', track.name);
+        await this.extractMetadata(track);
+        track.metadataLoaded = true;
+        
+        // Update the playlist display with the new metadata
+        this.renderPlaylist();
+      }
+
       // Revoke previous object URL if exists
       if (this.audio.src && this.audio.src.startsWith('blob:')) {
         URL.revokeObjectURL(this.audio.src);
@@ -501,36 +943,67 @@ class MusicPlayer {
       if (track.filePath) {
         // Electron: use file:// protocol
         this.audio.src = `file://${track.filePath}`;
+        console.log('Using Electron file path:', this.audio.src);
       } else if (track.file) {
         // Web: create object URL from file
         const url = URL.createObjectURL(track.file);
         this.audio.src = url;
+        console.log('Using blob URL:', this.audio.src);
       }
 
-      // Update UI
+      // Update UI immediately
       this.updateNowPlaying(track);
       this.renderPlaylist();
 
-      // Load the audio
-      await this.audio.load();
+      // Wait for the audio to be ready
+      return new Promise((resolve, reject) => {
+        const onCanPlay = async () => {
+          this.audio.removeEventListener('canplay', onCanPlay);
+          this.audio.removeEventListener('error', onError);
+          
+          console.log('Audio can play, duration:', this.audio.duration);
+          
+          // Auto-play if we were already playing or if clicked from playlist
+          if (wasPlaying || this.shouldAutoPlay) {
+            try {
+              console.log('Attempting to play...');
+              await this.audio.play();
+              this.isPlaying = true;
+              this.playBtn.textContent = '⏸';
+              this.shouldAutoPlay = false;
+              console.log('Playing successfully');
+            } catch (error) {
+              console.error('Playback error:', error);
+              this.isPlaying = false;
+              this.playBtn.textContent = '▶';
+            }
+          }
+          this.renderPlaylist();
+          resolve();
+        };
 
-      // Auto-play if already playing
-      if (this.isPlaying) {
-        try {
-          await this.audio.play();
-        } catch (error) {
-          console.error('Playback error:', error);
-          this.isPlaying = false;
-          this.playBtn.textContent = '▶';
-        }
-      }
+        const onError = (error) => {
+          this.audio.removeEventListener('canplay', onCanPlay);
+          this.audio.removeEventListener('error', onError);
+          console.error('Error loading track:', error);
+          console.error('Audio error details:', this.audio.error);
+          reject(error);
+        };
+
+        this.audio.addEventListener('canplay', onCanPlay, { once: true });
+        this.audio.addEventListener('error', onError, { once: true });
+        this.audio.load();
+      });
     } catch (error) {
-      console.error('Error loading track:', error);
+      console.error('Error in loadTrack:', error);
     }
   }
 
   updateNowPlaying(track) {
     const metadata = track.metadata || {};
+    
+    console.log('Updating now playing with track:', track);
+    console.log('Track metadata:', metadata);
 
     this.trackTitle.textContent = metadata.title || track.name;
     this.trackArtist.textContent = metadata.artist || 'Unknown Artist';
@@ -538,11 +1011,13 @@ class MusicPlayer {
 
     // Update album art
     if (metadata.picture) {
+      console.log('Album art found');
       const { data, format } = metadata.picture;
       const base64 = this.arrayBufferToBase64(data);
       this.albumArt.src = `data:${format};base64,${base64}`;
       this.albumArt.classList.add('visible');
     } else {
+      console.log('No album art found');
       this.albumArt.classList.remove('visible');
     }
   }
@@ -557,11 +1032,16 @@ class MusicPlayer {
   }
 
   async togglePlay() {
-    if (this.playlist.length === 0) return;
+    if (this.playlist.length === 0) {
+      console.log('No tracks in playlist');
+      return;
+    }
 
     // Load first track if none selected
     if (this.currentIndex === -1) {
+      this.shouldAutoPlay = true;
       await this.loadTrack(0);
+      return;
     }
 
     if (this.isPlaying) {
@@ -570,16 +1050,26 @@ class MusicPlayer {
       this.playBtn.textContent = '▶';
     } else {
       try {
-        await this.audio.play();
-        this.isPlaying = true;
-        this.playBtn.textContent = '⏸';
+        const playPromise = this.audio.play();
+        
+        if (playPromise !== undefined) {
+          await playPromise;
+          this.isPlaying = true;
+          this.playBtn.textContent = '⏸';
+        }
       } catch (error) {
         console.error('Play error:', error);
-        // Try to reload the track
-        await this.loadTrack(this.currentIndex);
-        await this.audio.play();
-        this.isPlaying = true;
-        this.playBtn.textContent = '⏸';
+        
+        // If play failed, try reloading the track
+        if (error.name === 'NotAllowedError' || error.name === 'NotSupportedError') {
+          console.log('Reloading track due to playback error...');
+          this.shouldAutoPlay = true;
+          await this.loadTrack(this.currentIndex);
+        } else {
+          this.isPlaying = false;
+          this.playBtn.textContent = '▶';
+          alert('Unable to play audio. Please check the file format.');
+        }
       }
     }
 
@@ -592,6 +1082,11 @@ class MusicPlayer {
     let newIndex = this.currentIndex - 1;
     if (newIndex < 0) {
       newIndex = this.playlist.length - 1;
+    }
+
+    // Maintain playing state
+    if (this.isPlaying) {
+      this.shouldAutoPlay = true;
     }
 
     this.loadTrack(newIndex);
@@ -608,6 +1103,11 @@ class MusicPlayer {
       if (newIndex >= this.playlist.length) {
         newIndex = 0;
       }
+    }
+
+    // Maintain playing state
+    if (this.isPlaying) {
+      this.shouldAutoPlay = true;
     }
 
     this.loadTrack(newIndex);
@@ -703,9 +1203,14 @@ function initMusicPlayer() {
   if (!musicPlayer) {
     musicPlayer = new MusicPlayer();
   }
+  return musicPlayer;
 }
 
 // Export for use in main app
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { MusicPlayer, initMusicPlayer };
 }
+
+// Make it available globally
+window.MusicPlayer = MusicPlayer;
+window.initMusicPlayer = initMusicPlayer;
