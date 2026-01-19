@@ -11,6 +11,7 @@ const appTiles = document.querySelectorAll('.app-tile');
 const backBtn = document.getElementById('backBtn');
 const settingsBackBtn = document.getElementById('settingsBackBtn');
 const navBtns = document.querySelectorAll('.nav-btn');
+const musicInterface = document.getElementById('musicInterface');
 
 // Quick Settings Dropdown
 const quickSettingsBtn = document.getElementById('quickSettingsBtn');
@@ -44,8 +45,8 @@ closeDropdownBtn.addEventListener('click', () => {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
-    if (!quickSettingsDropdown.contains(e.target) && 
-        e.target !== quickSettingsBtn && 
+    if (!quickSettingsDropdown.contains(e.target) &&
+        e.target !== quickSettingsBtn &&
         e.target !== carplayQuickSettingsBtn) {
         quickSettingsDropdown.classList.remove('active');
         quickSettingsBtn.classList.remove('active');
@@ -83,29 +84,29 @@ if (!debugMode) {
 
 // Check for CarPlay dongle on startup
 async function checkForDongle() {
-  try {
-    if (!navigator.usb) {
-      console.log('WebUSB not supported');
-      disableCarPlayButton();
-      return;
-    }
+    try {
+        if (!navigator.usb) {
+            console.log('WebUSB not supported');
+            disableCarPlayButton();
+            return;
+        }
 
-    const devices = await navigator.usb.getDevices();
-    const carplayDevice = devices.find(d =>
-      (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521)) ||
-      (d.vendorId === 0x05ac && d.productId === 0x12a8) // Carlinkit 5.0
-    );
+        const devices = await navigator.usb.getDevices();
+        const carplayDevice = devices.find(d =>
+            (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521)) ||
+            (d.vendorId === 0x05ac && d.productId === 0x12a8) // Carlinkit 5.0
+        );
 
-    if (!carplayDevice) {
-      console.log('No CarPlay dongle found on startup');
-      disableCarPlayButton();
-    } else {
-      console.log('CarPlay dongle detected:', carplayDevice);
+        if (!carplayDevice) {
+            console.log('No CarPlay dongle found on startup');
+            disableCarPlayButton();
+        } else {
+            console.log('CarPlay dongle detected:', carplayDevice);
+        }
+    } catch (error) {
+        console.error('Error checking for dongle:', error);
+        disableCarPlayButton();
     }
-  } catch (error) {
-    console.error('Error checking for dongle:', error);
-    disableCarPlayButton();
-  }
 }
 
 function disableCarPlayButton() {
@@ -205,7 +206,7 @@ connectCarPlayBtn.addEventListener('click', async () => {
     carplayStatusText.textContent = 'Requesting device access...';
 
     await connectCarPlay();
-    
+
     if (!carplayManager.isConnected) {
         connectCarPlayBtn.disabled = false;
         connectCarPlayBtn.textContent = 'Connect Device';
@@ -219,7 +220,7 @@ let touchStartY = 0;
 
 carplayCanvas.addEventListener('mousedown', async (e) => {
     console.log('Canvas mousedown event fired');
-    
+
     // Close dropdown if open
     if (quickSettingsDropdown.classList.contains('active')) {
         quickSettingsDropdown.classList.remove('active');
@@ -227,7 +228,7 @@ carplayCanvas.addEventListener('mousedown', async (e) => {
         carplayQuickSettingsBtn.classList.remove('active');
         return;
     }
-    
+
     if (!carplayManager.isConnected) {
         console.log('CarPlay not connected, ignoring mousedown');
         return;
@@ -285,7 +286,7 @@ carplayCanvas.addEventListener('mouseleave', async (e) => {
 // Touch events for mobile/tablet devices
 carplayCanvas.addEventListener('touchstart', async (e) => {
     console.log('Canvas touchstart event fired');
-    
+
     // Close dropdown if open
     if (quickSettingsDropdown.classList.contains('active')) {
         quickSettingsDropdown.classList.remove('active');
@@ -294,7 +295,7 @@ carplayCanvas.addEventListener('touchstart', async (e) => {
         e.preventDefault();
         return;
     }
-    
+
     if (!carplayManager.isConnected) {
         console.log('CarPlay not connected, ignoring touchstart');
         return;
@@ -359,7 +360,7 @@ function switchToMainUI() {
     carplayInterface.classList.remove('active');
     carplayInterface.classList.remove('fullscreen');
     homeScreen.style.display = 'grid';
-    
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[0].classList.add('active'); // Activate home button
@@ -370,19 +371,19 @@ function switchToCarPlayUI() {
     console.log('Switching to CarPlay UI');
     homeScreen.style.display = 'none';
     carplayInterface.classList.add('active');
-    
+
     // Auto-connect if not already connected and not in debug mode
     if (!carplayManager.isConnected && !debugMode) {
         console.log('Auto-connecting to CarPlay...');
         carplayPlaceholder.innerHTML = '<div class="icon">📱</div><p>Connecting to device...</p>';
         connectCarPlay();
     }
-    
+
     // If video is showing, go fullscreen
     if (carplayCanvas.style.display === 'block') {
         carplayInterface.classList.add('fullscreen');
     }
-    
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[3].classList.add('active'); // Activate phone button
@@ -415,8 +416,19 @@ appTiles.forEach(tile => {
             console.log('Opening settings interface');
             settingsInterface.classList.add('active');
             loadSettings();
+        } else if (app === 'media') {
+            console.log('Opening music interface');
+            musicInterface.classList.add('active');
+            initMusicPlayer();
         }
     });
+});
+
+const musicBackBtn = document.getElementById('musicBackBtn');
+musicBackBtn.addEventListener('click', () => {
+    console.log('Closing music interface');
+    musicInterface.classList.remove('active');
+    homeScreen.style.display = 'grid';
 });
 
 // Back buttons
@@ -425,7 +437,7 @@ backBtn.addEventListener('click', () => {
     radioInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
     ipcRenderer.send('stop-radio');
-    
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[0].classList.add('active'); // Activate home button
@@ -435,7 +447,7 @@ settingsBackBtn.addEventListener('click', () => {
     console.log('Settings back button clicked');
     settingsInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
-    
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[0].classList.add('active'); // Activate home button
@@ -456,7 +468,7 @@ navBtns.forEach((btn, index) => {
         settingsInterface.classList.remove('active');
 
         // Show appropriate screen based on button index
-        switch(index) {
+        switch (index) {
             case 0: // Home
                 homeScreen.style.display = 'grid';
                 break;
@@ -619,7 +631,7 @@ function saveSettings() {
     // CarPlay settings
     const carplayWidth = document.getElementById('carplayWidth').value;
     const carplayHeight = document.getElementById('carplayHeight').value;
-    
+
     settings['carplay.width'] = carplayWidth ? parseInt(carplayWidth) : null;
     settings['carplay.height'] = carplayHeight ? parseInt(carplayHeight) : null;
     settings['carplay.fps'] = parseInt(document.getElementById('carplayFps').value);
