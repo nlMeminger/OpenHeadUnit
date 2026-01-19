@@ -1,5 +1,5 @@
 // ============================================================================
-// DongleDriver.js
+// DongleDriver.js - Updated with Carlinkit 5.0 Support
 // ============================================================================
 import { EventEmitter } from './eventEmitter.js';
 
@@ -25,8 +25,8 @@ export const HandDriveType = {
 }
 
 export const DEFAULT_CONFIG = {
-  width: 1200,
-  height: 720,
+  width: 800,
+  height: 640,
   fps: 20,
   dpi: 160,
   format: 5,
@@ -63,8 +63,11 @@ export class DongleDriver extends EventEmitter {
   }
 
   static knownDevices = [
+    // Original devices
     { vendorId: 0x1314, productId: 0x1520 },
     { vendorId: 0x1314, productId: 0x1521 },
+    // Carlinkit 5.0 (appears as Apple device)
+    { vendorId: 0x05ac, productId: 0x12a8 },
   ]
 
   initialise = async (device) => {

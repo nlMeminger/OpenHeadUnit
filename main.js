@@ -26,31 +26,32 @@ app.whenReady().then(() => {
     }
   });
 
-  // Handle WebUSB device selection
-  mainWindow.webContents.session.on('select-usb-device', (event, details, callback) => {
-    event.preventDefault();
+// WebUSB device selection handler - add Carlinkit 5.0 support
+mainWindow.webContents.session.on('select-usb-device', (event, details, callback) => {
+  event.preventDefault();
+  
+  console.log('USB device selection requested');
+  console.log('Available devices:', details.deviceList);
+  
+  if (details.deviceList && details.deviceList.length > 0) {
+    // Find CarPlay dongle - includes original dongles and Carlinkit 5.0
+    const carplayDongle = details.deviceList.find(device => 
+      (device.vendorId === 0x1314 && (device.productId === 0x1520 || device.productId === 0x1521)) ||
+      (device.vendorId === 0x05ac && device.productId === 0x12a8) // Carlinkit 5.0
+    );
     
-    console.log('USB device selection requested');
-    console.log('Available devices:', details.deviceList);
-    
-    if (details.deviceList && details.deviceList.length > 0) {
-      // Find CarPlay dongle
-      const carplayDongle = details.deviceList.find(device => 
-        (device.vendorId === 0x1314 && (device.productId === 0x1520 || device.productId === 0x1521))
-      );
-      
-      if (carplayDongle) {
-        console.log('Found CarPlay dongle:', carplayDongle);
-        callback(carplayDongle.deviceId);
-      } else {
-        console.log('CarPlay dongle not found, showing first device');
-        callback(details.deviceList[0].deviceId);
-      }
+    if (carplayDongle) {
+      console.log('Found CarPlay dongle:', carplayDongle);
+      callback(carplayDongle.deviceId);
     } else {
-      console.log('No USB devices found');
-      callback('');
+      console.log('CarPlay dongle not found, showing first device');
+      callback(details.deviceList[0].deviceId);
     }
-  });
+  } else {
+    console.log('No USB devices found');
+    callback('');
+  }
+});
 
   // Handle USB device permission check
   mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {

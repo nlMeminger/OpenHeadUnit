@@ -62,7 +62,8 @@ class CarPlayManager extends EventEmitter {
 
       if (devices.length > 0) {
         const carplayDevice = devices.find(d =>
-          (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521))
+          (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521)) ||
+          (d.vendorId === 0x05ac && d.productId === 0x12a8) // Carlinkit 5.0
         );
 
         if (carplayDevice) {

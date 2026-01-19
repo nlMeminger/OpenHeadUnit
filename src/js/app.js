@@ -83,28 +83,29 @@ if (!debugMode) {
 
 // Check for CarPlay dongle on startup
 async function checkForDongle() {
-    try {
-        if (!navigator.usb) {
-            console.log('WebUSB not supported');
-            disableCarPlayButton();
-            return;
-        }
-
-        const devices = await navigator.usb.getDevices();
-        const carplayDevice = devices.find(d =>
-            (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521))
-        );
-
-        if (!carplayDevice) {
-            console.log('No CarPlay dongle found on startup');
-            disableCarPlayButton();
-        } else {
-            console.log('CarPlay dongle detected:', carplayDevice);
-        }
-    } catch (error) {
-        console.error('Error checking for dongle:', error);
-        disableCarPlayButton();
+  try {
+    if (!navigator.usb) {
+      console.log('WebUSB not supported');
+      disableCarPlayButton();
+      return;
     }
+
+    const devices = await navigator.usb.getDevices();
+    const carplayDevice = devices.find(d =>
+      (d.vendorId === 0x1314 && (d.productId === 0x1520 || d.productId === 0x1521)) ||
+      (d.vendorId === 0x05ac && d.productId === 0x12a8) // Carlinkit 5.0
+    );
+
+    if (!carplayDevice) {
+      console.log('No CarPlay dongle found on startup');
+      disableCarPlayButton();
+    } else {
+      console.log('CarPlay dongle detected:', carplayDevice);
+    }
+  } catch (error) {
+    console.error('Error checking for dongle:', error);
+    disableCarPlayButton();
+  }
 }
 
 function disableCarPlayButton() {
