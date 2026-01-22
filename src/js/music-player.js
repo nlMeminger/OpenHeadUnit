@@ -161,9 +161,9 @@ class MusicPlayer {
   async selectFolder() {
     try {
       // Check if running in Electron
-      if (window.electronAPI && window.electronAPI.selectMusicFolder) {
+      if (typeof ipcRenderer !== 'undefined') {
         // Use Electron's native dialog
-        const result = await window.electronAPI.selectMusicFolder();
+        const result = await ipcRenderer.invoke('select-music-folder');
         if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
           return;
         }
@@ -179,8 +179,8 @@ class MusicPlayer {
 
         // Save to settings if available
         try {
-          if (window.ipcRenderer) {
-            window.ipcRenderer.sendSync('update-settings', {
+          if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.sendSync('update-settings', {
               'music.folderPath': folderPath
             });
           }
@@ -233,11 +233,11 @@ class MusicPlayer {
   async loadSavedFolder() {
     try {
       // Check if using Electron
-      if (window.electronAPI && window.electronAPI.getMusicFiles) {
+      if (typeof ipcRenderer !== 'undefined') {
         // First try to load from settings
         let savedPath = null;
         try {
-          const settings = window.ipcRenderer?.sendSync('get-settings');
+          const settings = ipcRenderer.sendSync('get-settings');
           savedPath = settings?.music?.folderPath;
         } catch (e) {
           console.log('Could not load music folder from settings, trying localStorage');
@@ -377,11 +377,11 @@ class MusicPlayer {
 
   async scanMusicFolderElectron(folderPath) {
     this.playlist = [];
-    
+
     try {
       console.log('Scanning Electron folder for audio files...');
       // Get files from Electron API
-      const files = await window.electronAPI.getMusicFiles(folderPath);
+      const files = await ipcRenderer.invoke('get-music-files', folderPath);
       
       if (!files || files.length === 0) {
         this.renderPlaylist();

@@ -1,7 +1,9 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog } from 'electron';
 import { exec, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { readdir } from 'fs/promises';
+import { join } from 'path';
 import settingsManager from './src/js/settings-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -272,4 +274,43 @@ ipcMain.on('exit-app', () => {
 ipcMain.on('notify-settings-updated', (event) => {
   const settings = settingsManager.getAll();
   mainWindow.webContents.send('settings-updated', settings);
+});
+
+// Music folder selection
+ipcMain.handle('select-music-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  });
+  return result;
+});
+
+// Get music files from folder
+ipcMain.handle('get-music-files', async (event, folderPath) => {
+  try {
+    const files = [];
+    const audioExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma'];
+
+    async function scanDirectory(dirPath) {
+      const entries = await readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = join(dirPath, entry.name);
+
+        if (entry.isDirectory()) {
+          await scanDirectory(fullPath);
+        } else if (entry.isFile()) {
+          const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+          if (audioExtensions.includes(ext)) {
+            files.push(fullPath);
+          }
+        }
+      }
+    }
+
+    await scanDirectory(folderPath);
+    return files;
+  } catch (error) {
+    console.error('Error scanning music folder:', error);
+    throw error;
+  }
 });

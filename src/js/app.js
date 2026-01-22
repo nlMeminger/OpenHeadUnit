@@ -747,9 +747,10 @@ if (selectMusicFolderBtn) {
     selectMusicFolderBtn.addEventListener('click', async () => {
         console.log('Select music folder button clicked');
         try {
-            if (window.electronAPI && window.electronAPI.selectMusicFolder) {
-                console.log('Using Electron API to select folder');
-                const result = await window.electronAPI.selectMusicFolder();
+            // Use ipcRenderer directly (available as global from controls.js)
+            if (typeof ipcRenderer !== 'undefined') {
+                console.log('Using ipcRenderer to select folder');
+                const result = await ipcRenderer.invoke('select-music-folder');
                 console.log('Folder selection result:', result);
                 if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
                     const folderPath = result.filePaths[0];
@@ -757,7 +758,7 @@ if (selectMusicFolderBtn) {
                     console.log('Set folder path to:', folderPath);
                 }
             } else {
-                console.log('Electron API not available');
+                console.log('ipcRenderer not available');
                 alert('Folder selection requires Electron environment');
             }
         } catch (error) {
