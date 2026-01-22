@@ -1218,6 +1218,46 @@ input[type="range"]::-webkit-slider-thumb {
     border-color: #00ff88;
 }
 
+.music-folder-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.music-folder-path {
+    flex: 1;
+    font-size: 12px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-select-btn-small {
+    padding: 4px 8px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.folder-select-btn-small:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.folder-select-btn-small:active {
+    background: #1a1a1a;
+}
+
 .folder-select-btn {
     padding: 8px 16px;
     background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
