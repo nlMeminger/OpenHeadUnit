@@ -79,6 +79,9 @@ class SettingsManager {
       carplay: {
         width: null,
         height: null
+      },
+      music: {
+        folderPath: null
       }
     };
   }

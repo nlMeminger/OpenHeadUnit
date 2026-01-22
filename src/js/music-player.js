@@ -76,6 +76,10 @@ class MusicPlayer {
     this.recentlyPlayedList = document.getElementById('recentlyPlayedList');
     this.clearHistoryBtn = document.getElementById('clearHistoryBtn');
     this.recentlyPlayed = this.loadRecentlyPlayed();
+
+    // On-screen keyboard
+    this.onscreenKeyboard = document.getElementById('onscreenKeyboard');
+    this.keyboardClose = document.getElementById('keyboardClose');
   }
 
   attachEventListeners() {
@@ -132,6 +136,24 @@ class MusicPlayer {
     // Recently played
     this.clearHistoryBtn.addEventListener('click', () => this.clearRecentlyPlayed());
 
+    // On-screen keyboard
+    this.searchInput.addEventListener('focus', () => this.showKeyboard());
+    this.searchInput.addEventListener('click', () => this.showKeyboard());
+    this.keyboardClose.addEventListener('click', () => this.hideKeyboard());
+
+    // Keyboard key clicks
+    const keyButtons = this.onscreenKeyboard.querySelectorAll('.key-btn');
+    keyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        if (key === 'backspace') {
+          this.handleKeyboardBackspace();
+        } else if (key) {
+          this.handleKeyboardInput(key);
+        }
+      });
+    });
+
     // Set initial volume
     this.setVolume(this.volumeSlider.value);
   }
@@ -152,8 +174,19 @@ class MusicPlayer {
         // Update UI
         this.musicFolderPath.textContent = `📁 ${folderPath}`;
 
-        // Save folder path to localStorage
+        // Save folder path to localStorage (backup)
         localStorage.setItem('musicFolderPath', folderPath);
+
+        // Save to settings if available
+        try {
+          if (window.ipcRenderer) {
+            window.ipcRenderer.sendSync('update-settings', {
+              'music.folderPath': folderPath
+            });
+          }
+        } catch (e) {
+          console.log('Could not save to settings:', e);
+        }
 
         // Scan for music files using Electron API
         await this.scanMusicFolderElectron(folderPath);
@@ -201,8 +234,20 @@ class MusicPlayer {
     try {
       // Check if using Electron
       if (window.electronAPI && window.electronAPI.getMusicFiles) {
-        // Try to load from localStorage
-        const savedPath = localStorage.getItem('musicFolderPath');
+        // First try to load from settings
+        let savedPath = null;
+        try {
+          const settings = window.ipcRenderer?.sendSync('get-settings');
+          savedPath = settings?.music?.folderPath;
+        } catch (e) {
+          console.log('Could not load music folder from settings, trying localStorage');
+        }
+
+        // Fallback to localStorage if settings not available
+        if (!savedPath) {
+          savedPath = localStorage.getItem('musicFolderPath');
+        }
+
         if (savedPath) {
           this.musicFolder = savedPath;
           this.musicFolderPath.textContent = `📁 ${savedPath}`;
@@ -1804,6 +1849,30 @@ class MusicPlayer {
     if (days < 7) return `${days}d ago`;
 
     return 'Over a week ago';
+  }
+
+  showKeyboard() {
+    this.onscreenKeyboard.style.display = 'block';
+    this.searchInput.removeAttribute('readonly');
+    this.searchInput.focus();
+  }
+
+  hideKeyboard() {
+    this.onscreenKeyboard.style.display = 'none';
+    this.searchInput.setAttribute('readonly', 'true');
+    this.searchInput.blur();
+  }
+
+  handleKeyboardInput(key) {
+    const currentValue = this.searchInput.value;
+    this.searchInput.value = currentValue + key;
+    this.handleSearch(this.searchInput.value);
+  }
+
+  handleKeyboardBackspace() {
+    const currentValue = this.searchInput.value;
+    this.searchInput.value = currentValue.slice(0, -1);
+    this.handleSearch(this.searchInput.value);
   }
 }
 

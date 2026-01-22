@@ -588,6 +588,12 @@ function loadSettings() {
     document.getElementById('showSeconds').checked = settings.display.showSeconds !== false; // Default to true
     document.getElementById('temperatureUnit').value = settings.display.temperatureUnit || 'fahrenheit';
 
+    // Music settings
+    const musicFolderInput = document.getElementById('musicFolderSetting');
+    if (musicFolderInput) {
+        musicFolderInput.value = settings.music?.folderPath || '';
+    }
+
     // CarPlay settings
     document.getElementById('carplayWidth').value = settings.carplay.width || '';
     document.getElementById('carplayHeight').value = settings.carplay.height || '';
@@ -639,6 +645,12 @@ function saveSettings() {
     settings['carplay.boxName'] = document.getElementById('carplayBoxName').value || 'nodePlay';
     settings['carplay.hand'] = parseInt(document.getElementById('carplayHand').value);
 
+    // Music settings
+    const musicFolderInput = document.getElementById('musicFolderSetting');
+    if (musicFolderInput) {
+        settings['music.folderPath'] = musicFolderInput.value || null;
+    }
+
     // Get radio presets
     const presetInputs = document.querySelectorAll('.preset-editor-item input');
     const presets = [];
@@ -689,6 +701,20 @@ function updateRadioPresets() {
 }
 
 document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+// Music folder select button in settings
+const selectMusicFolderBtn = document.getElementById('selectMusicFolderBtn');
+if (selectMusicFolderBtn) {
+    selectMusicFolderBtn.addEventListener('click', async () => {
+        if (window.electronAPI && window.electronAPI.selectMusicFolder) {
+            const result = await window.electronAPI.selectMusicFolder();
+            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                const folderPath = result.filePaths[0];
+                document.getElementById('musicFolderSetting').value = folderPath;
+            }
+        }
+    });
+}
 
 document.getElementById('resetSettingsBtn').addEventListener('click', () => {
     if (confirm('Are you sure you want to reset all settings to defaults?')) {
