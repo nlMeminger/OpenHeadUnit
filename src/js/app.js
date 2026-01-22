@@ -427,6 +427,13 @@ appTiles.forEach(tile => {
 const musicBackBtn = document.getElementById('musicBackBtn');
 musicBackBtn.addEventListener('click', () => {
     console.log('Closing music interface');
+
+    // Hide keyboard and context menu when leaving music interface
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
+
     musicInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
 });
@@ -706,14 +713,28 @@ document.getElementById('saveSettingsBtn').addEventListener('click', saveSetting
 const selectMusicFolderBtn = document.getElementById('selectMusicFolderBtn');
 if (selectMusicFolderBtn) {
     selectMusicFolderBtn.addEventListener('click', async () => {
-        if (window.electronAPI && window.electronAPI.selectMusicFolder) {
-            const result = await window.electronAPI.selectMusicFolder();
-            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-                const folderPath = result.filePaths[0];
-                document.getElementById('musicFolderSetting').value = folderPath;
+        console.log('Select music folder button clicked');
+        try {
+            if (window.electronAPI && window.electronAPI.selectMusicFolder) {
+                console.log('Using Electron API to select folder');
+                const result = await window.electronAPI.selectMusicFolder();
+                console.log('Folder selection result:', result);
+                if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                    const folderPath = result.filePaths[0];
+                    document.getElementById('musicFolderSetting').value = folderPath;
+                    console.log('Set folder path to:', folderPath);
+                }
+            } else {
+                console.log('Electron API not available');
+                alert('Folder selection requires Electron environment');
             }
+        } catch (error) {
+            console.error('Error selecting folder:', error);
+            alert('Error selecting folder: ' + error.message);
         }
     });
+} else {
+    console.warn('selectMusicFolderBtn element not found');
 }
 
 document.getElementById('resetSettingsBtn').addEventListener('click', () => {
