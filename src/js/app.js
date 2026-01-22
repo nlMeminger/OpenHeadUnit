@@ -404,7 +404,20 @@ appTiles.forEach(tile => {
     tile.addEventListener('click', () => {
         const app = tile.getAttribute('data-app');
         console.log('App tile clicked:', app);
+
+        // Hide all interfaces first
         homeScreen.style.display = 'none';
+        radioInterface.classList.remove('active');
+        carplayInterface.classList.remove('active');
+        carplayInterface.classList.remove('fullscreen');
+        settingsInterface.classList.remove('active');
+        musicInterface.classList.remove('active');
+
+        // Hide keyboard and context menu when switching interfaces
+        const keyboard = document.getElementById('onscreenKeyboard');
+        const contextMenu = document.getElementById('trackContextMenu');
+        if (keyboard) keyboard.style.display = 'none';
+        if (contextMenu) contextMenu.style.display = 'none';
 
         if (app === 'radio') {
             console.log('Opening radio interface');
@@ -445,6 +458,12 @@ backBtn.addEventListener('click', () => {
     homeScreen.style.display = 'grid';
     ipcRenderer.send('stop-radio');
 
+    // Hide any music interface overlays
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[0].classList.add('active'); // Activate home button
@@ -454,6 +473,12 @@ settingsBackBtn.addEventListener('click', () => {
     console.log('Settings back button clicked');
     settingsInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
+
+    // Hide any music interface overlays
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
 
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
@@ -473,6 +498,13 @@ navBtns.forEach((btn, index) => {
         carplayInterface.classList.remove('active');
         carplayInterface.classList.remove('fullscreen');
         settingsInterface.classList.remove('active');
+        musicInterface.classList.remove('active');
+
+        // Hide keyboard and context menu when switching interfaces
+        const keyboard = document.getElementById('onscreenKeyboard');
+        const contextMenu = document.getElementById('trackContextMenu');
+        if (keyboard) keyboard.style.display = 'none';
+        if (contextMenu) contextMenu.style.display = 'none';
 
         // Show appropriate screen based on button index
         switch (index) {
