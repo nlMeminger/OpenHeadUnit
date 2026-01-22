@@ -230,6 +230,15 @@
                                 <span>0 tracks</span>
                             </div>
 
+                            <!-- Recently Played Section -->
+                            <div class="recently-played-section" id="recentlyPlayedSection" style="display: none;">
+                                <div class="recently-played-header">
+                                    <h4>Recently Played</h4>
+                                    <button class="clear-history-btn" id="clearHistoryBtn">Clear</button>
+                                </div>
+                                <div class="recently-played-list" id="recentlyPlayedList"></div>
+                            </div>
+
                             <div class="playlist-container" id="playlistContainer">
                                 <div class="playlist-empty">
                                     <div class="empty-icon">🎵</div>
@@ -238,6 +247,13 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Context Menu -->
+                    <div class="context-menu" id="trackContextMenu" style="display: none;">
+                        <div class="context-menu-item" data-action="play-next">▶ Play Next</div>
+                        <div class="context-menu-item" data-action="go-to-artist">👤 Go to Artist</div>
+                        <div class="context-menu-item" data-action="go-to-album">💿 Go to Album</div>
                     </div>
                 </div>
 
