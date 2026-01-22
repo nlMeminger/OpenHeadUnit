@@ -10,6 +10,7 @@ class MusicPlayer {
     this.musicFolder = null;
     this.folderHandle = null;
     this.shouldAutoPlay = false;
+    this.volumeBeforeMute = null;
 
     this.initializeElements();
     this.attachEventListeners();
@@ -40,6 +41,7 @@ class MusicPlayer {
     // Volume
     this.volumeSlider = document.getElementById('volumeSlider');
     this.volumeValue = document.getElementById('volumeValue');
+    this.volumeIcon = document.querySelector('.volume-icon');
 
     // Playlist
     this.playlistContainer = document.getElementById('playlistContainer');
@@ -57,6 +59,11 @@ class MusicPlayer {
     this.currentArtist = null;
     this.currentAlbum = null;
     this.viewStack = []; // For breadcrumb navigation
+    this.searchQuery = '';
+
+    // Search elements
+    this.searchInput = document.getElementById('playlistSearch');
+    this.searchClear = document.getElementById('searchClear');
   }
 
   attachEventListeners() {
@@ -78,6 +85,13 @@ class MusicPlayer {
     // Volume
     this.volumeSlider.addEventListener('input', (e) => this.setVolume(e.target.value));
 
+    // Volume icon click to mute/unmute
+    this.volumeIcon.addEventListener('click', () => this.toggleMute());
+
+    // Volume scroll wheel support
+    this.volumeIcon.addEventListener('wheel', (e) => this.handleVolumeScroll(e), { passive: false });
+    this.volumeSlider.addEventListener('wheel', (e) => this.handleVolumeScroll(e), { passive: false });
+
     // Folder selection
     this.folderSelectBtn.addEventListener('click', () => this.selectFolder());
 
@@ -86,6 +100,13 @@ class MusicPlayer {
 
     // Sidebar toggle
     this.toggleSidebarBtn.addEventListener('click', () => this.toggleSidebar());
+
+    // Search functionality
+    this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+    this.searchClear.addEventListener('click', () => this.clearSearch());
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => this.handleKeyPress(e));
 
     // Set initial volume
     this.setVolume(this.volumeSlider.value);
@@ -583,20 +604,23 @@ class MusicPlayer {
   }
 
   renderFlatView() {
-    // Show all tracks in a flat list
+    // Show all tracks in a flat list (filtered by search query)
     this.playlist.forEach((track, index) => {
-      const item = this.createTrackElement(track, index);
-      this.playlistContainer.appendChild(item);
+      if (this.filterTrack(track)) {
+        const item = this.createTrackElement(track, index);
+        this.playlistContainer.appendChild(item);
+      }
     });
   }
 
   renderArtistView() {
     if (this.currentArtist && this.currentAlbum) {
-      // Show tracks for this album
+      // Show tracks for this album (filtered by search)
       this.renderBreadcrumb();
-      const tracks = this.playlist.filter(t => 
+      const tracks = this.playlist.filter(t =>
         (t.metadata?.artist || 'Unknown Artist') === this.currentArtist &&
-        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum &&
+        this.filterTrack(t)
       );
       tracks.forEach((track, idx) => {
         const actualIndex = this.playlist.indexOf(track);
@@ -604,29 +628,36 @@ class MusicPlayer {
         this.playlistContainer.appendChild(item);
       });
     } else if (this.currentArtist) {
-      // Show albums for this artist
+      // Show albums for this artist (filtered by search)
       this.renderBreadcrumb();
       const albums = this.getAlbumsForArtist(this.currentArtist);
       albums.forEach(album => {
-        const item = this.createAlbumElement(album, this.currentArtist);
-        this.playlistContainer.appendChild(item);
+        // Only show album if it has matching tracks
+        if (this.hasMatchingTracksInAlbum(this.currentArtist, album.name)) {
+          const item = this.createAlbumElement(album, this.currentArtist);
+          this.playlistContainer.appendChild(item);
+        }
       });
     } else {
-      // Show all artists
+      // Show all artists (filtered by search)
       const artists = this.getAllArtists();
       artists.forEach(artist => {
-        const item = this.createArtistElement(artist);
-        this.playlistContainer.appendChild(item);
+        // Only show artist if they have matching tracks
+        if (this.hasMatchingTracksForArtist(artist.name)) {
+          const item = this.createArtistElement(artist);
+          this.playlistContainer.appendChild(item);
+        }
       });
     }
   }
 
   renderAlbumView() {
     if (this.currentAlbum) {
-      // Show tracks for this album
+      // Show tracks for this album (filtered by search)
       this.renderBreadcrumb();
-      const tracks = this.playlist.filter(t => 
-        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+      const tracks = this.playlist.filter(t =>
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum &&
+        this.filterTrack(t)
       );
       tracks.forEach((track, idx) => {
         const actualIndex = this.playlist.indexOf(track);
@@ -634,11 +665,14 @@ class MusicPlayer {
         this.playlistContainer.appendChild(item);
       });
     } else {
-      // Show all albums grouped by artist
+      // Show all albums grouped by artist (filtered by search)
       const albums = this.getAllAlbums();
       albums.forEach(albumInfo => {
-        const item = this.createAlbumGroupElement(albumInfo);
-        this.playlistContainer.appendChild(item);
+        // Only show album if it has matching tracks
+        if (this.hasMatchingTracksInAlbumAny(albumInfo.album)) {
+          const item = this.createAlbumGroupElement(albumInfo);
+          this.playlistContainer.appendChild(item);
+        }
       });
     }
   }
@@ -857,7 +891,7 @@ class MusicPlayer {
 
     const thumbnail = document.createElement('div');
     thumbnail.className = 'track-thumbnail';
-    
+
     if (track.metadata?.picture) {
       const { data, format } = track.metadata.picture;
       const base64 = this.arrayBufferToBase64(data);
@@ -868,9 +902,21 @@ class MusicPlayer {
       thumbnail.textContent = '🎵';
     }
 
+    // Add now playing indicator if this is the current track
+    if (index === this.currentIndex) {
+      const nowPlayingIndicator = document.createElement('div');
+      nowPlayingIndicator.className = 'now-playing-indicator';
+      for (let i = 0; i < 3; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'eq-bar';
+        nowPlayingIndicator.appendChild(bar);
+      }
+      thumbnail.appendChild(nowPlayingIndicator);
+    }
+
     const info = document.createElement('div');
     info.className = 'track-info';
-    
+
     const name = document.createElement('div');
     name.className = 'track-name';
     name.textContent = track.metadata?.title || track.name;
@@ -1079,6 +1125,13 @@ class MusicPlayer {
   playPrevious() {
     if (this.playlist.length === 0) return;
 
+    // Smart previous: if more than 3 seconds into track, restart current track
+    if (this.audio.currentTime > 3) {
+      this.audio.currentTime = 0;
+      return;
+    }
+
+    // Otherwise go to previous track
     let newIndex = this.currentIndex - 1;
     if (newIndex < 0) {
       newIndex = this.playlist.length - 1;
@@ -1185,14 +1238,180 @@ class MusicPlayer {
   setVolume(value) {
     this.audio.volume = value / 100;
     this.volumeValue.textContent = `${value}%`;
+    this.updateVolumeIcon(value);
+  }
+
+  updateVolumeIcon(value) {
+    if (value == 0) {
+      this.volumeIcon.textContent = '🔇';
+    } else if (value < 50) {
+      this.volumeIcon.textContent = '🔉';
+    } else {
+      this.volumeIcon.textContent = '🔊';
+    }
   }
 
   formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '0:00';
-    
+
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  handleKeyPress(e) {
+    // Don't interfere with typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
+
+    // Check if music interface is active
+    const musicInterface = document.getElementById('musicInterface');
+    if (!musicInterface || !musicInterface.classList.contains('active')) {
+      return;
+    }
+
+    switch(e.key.toLowerCase()) {
+      case ' ':
+        // Space bar: Play/Pause
+        e.preventDefault();
+        this.togglePlay();
+        break;
+
+      case 'arrowright':
+        // Right arrow: Seek forward 5 seconds
+        e.preventDefault();
+        if (this.audio.duration) {
+          this.audio.currentTime = Math.min(this.audio.currentTime + 5, this.audio.duration);
+        }
+        break;
+
+      case 'arrowleft':
+        // Left arrow: Seek backward 5 seconds
+        e.preventDefault();
+        if (this.audio.duration) {
+          this.audio.currentTime = Math.max(this.audio.currentTime - 5, 0);
+        }
+        break;
+
+      case 'n':
+        // N key: Next track
+        e.preventDefault();
+        this.playNext();
+        break;
+
+      case 'p':
+        // P key: Previous track
+        e.preventDefault();
+        this.playPrevious();
+        break;
+
+      case 'm':
+        // M key: Mute/unmute
+        e.preventDefault();
+        this.toggleMute();
+        break;
+
+      case 's':
+        // S key: Toggle shuffle
+        e.preventDefault();
+        this.toggleShuffle();
+        break;
+
+      case 'r':
+        // R key: Cycle repeat modes
+        e.preventDefault();
+        this.cycleRepeat();
+        break;
+
+      case 'l':
+        // L key: Toggle sidebar
+        e.preventDefault();
+        this.toggleSidebar();
+        break;
+    }
+  }
+
+  toggleMute() {
+    if (this.audio.volume > 0) {
+      // Save current volume and mute
+      this.volumeBeforeMute = this.audio.volume * 100;
+      this.setVolume(0);
+      this.volumeSlider.value = 0;
+    } else {
+      // Restore previous volume or set to 70%
+      const restoreVolume = this.volumeBeforeMute || 70;
+      this.setVolume(restoreVolume);
+      this.volumeSlider.value = restoreVolume;
+    }
+  }
+
+  handleVolumeScroll(e) {
+    e.preventDefault();
+    const currentVolume = parseInt(this.volumeSlider.value);
+    const delta = e.deltaY < 0 ? 5 : -5; // Scroll up = increase, scroll down = decrease
+    const newVolume = Math.max(0, Math.min(100, currentVolume + delta));
+
+    this.volumeSlider.value = newVolume;
+    this.setVolume(newVolume);
+  }
+
+  handleSearch(query) {
+    this.searchQuery = query.toLowerCase().trim();
+
+    // Show/hide clear button
+    if (this.searchQuery) {
+      this.searchClear.style.display = 'block';
+    } else {
+      this.searchClear.style.display = 'none';
+    }
+
+    this.renderPlaylist();
+  }
+
+  clearSearch() {
+    this.searchQuery = '';
+    this.searchInput.value = '';
+    this.searchClear.style.display = 'none';
+    this.renderPlaylist();
+  }
+
+  filterTrack(track) {
+    if (!this.searchQuery) return true;
+
+    const metadata = track.metadata || {};
+    const title = (metadata.title || track.name || '').toLowerCase();
+    const artist = (metadata.artist || '').toLowerCase();
+    const album = (metadata.album || '').toLowerCase();
+
+    return title.includes(this.searchQuery) ||
+           artist.includes(this.searchQuery) ||
+           album.includes(this.searchQuery);
+  }
+
+  hasMatchingTracksForArtist(artistName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.artist || 'Unknown Artist') === artistName &&
+      this.filterTrack(t)
+    );
+  }
+
+  hasMatchingTracksInAlbum(artistName, albumName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.artist || 'Unknown Artist') === artistName &&
+      (t.metadata?.album || 'Unknown Album') === albumName &&
+      this.filterTrack(t)
+    );
+  }
+
+  hasMatchingTracksInAlbumAny(albumName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.album || 'Unknown Album') === albumName &&
+      this.filterTrack(t)
+    );
   }
 }
 
