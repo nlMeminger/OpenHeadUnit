@@ -763,15 +763,39 @@ if (selectMusicFolderBtn) {
                     });
                     console.log('Saved folder path to settings');
 
-                    // Show confirmation
+                    // Show scanning status
                     const statusDiv = document.getElementById('settingsStatus');
                     if (statusDiv) {
-                        statusDiv.textContent = 'Music folder saved! Go to Media Player to load your music.';
-                        statusDiv.className = 'settings-status success';
-                        setTimeout(() => {
-                            statusDiv.textContent = '';
+                        statusDiv.textContent = 'Scanning music library...';
+                        statusDiv.className = 'settings-status';
+                    }
+
+                    // Trigger library scan immediately
+                    try {
+                        console.log('Starting library scan for:', folderPath);
+                        const files = await ipcRenderer.invoke('get-music-files', folderPath);
+                        const fileCount = files ? files.length : 0;
+                        console.log(`Library scan complete: ${fileCount} files found`);
+
+                        // Show success with file count
+                        if (statusDiv) {
+                            statusDiv.textContent = `Music folder saved! Found ${fileCount} audio file${fileCount !== 1 ? 's' : ''}.`;
+                            statusDiv.className = 'settings-status success';
+                            setTimeout(() => {
+                                statusDiv.textContent = '';
+                                statusDiv.className = 'settings-status';
+                            }, 5000);
+                        }
+                    } catch (scanError) {
+                        console.error('Error scanning library:', scanError);
+                        if (statusDiv) {
+                            statusDiv.textContent = 'Music folder saved, but scan failed. Try opening Media Player.';
                             statusDiv.className = 'settings-status';
-                        }, 5000);
+                            setTimeout(() => {
+                                statusDiv.textContent = '';
+                                statusDiv.className = 'settings-status';
+                            }, 5000);
+                        }
                     }
                 }
             } else {
