@@ -756,6 +756,23 @@ if (selectMusicFolderBtn) {
                     const folderPath = result.filePaths[0];
                     document.getElementById('musicFolderSetting').value = folderPath;
                     console.log('Set folder path to:', folderPath);
+
+                    // Save immediately to settings so music player can find it
+                    ipcRenderer.sendSync('update-settings', {
+                        'music.folderPath': folderPath
+                    });
+                    console.log('Saved folder path to settings');
+
+                    // Show confirmation
+                    const statusDiv = document.getElementById('settingsStatus');
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Music folder saved! Go to Media Player to load your music.';
+                        statusDiv.className = 'settings-status success';
+                        setTimeout(() => {
+                            statusDiv.textContent = '';
+                            statusDiv.className = 'settings-status';
+                        }, 5000);
+                    }
                 }
             } else {
                 console.log('ipcRenderer not available');

@@ -230,6 +230,24 @@ class MusicPlayer {
     }
   }
 
+  checkForNewFolder() {
+    // Check if folder has been set since player was initialized
+    if (typeof ipcRenderer !== 'undefined' && this.playlist.length === 0) {
+      try {
+        const settings = ipcRenderer.sendSync('get-settings');
+        const savedPath = settings?.music?.folderPath;
+
+        // If there's a folder path and we don't have one loaded, load it
+        if (savedPath && savedPath !== this.musicFolder) {
+          console.log('New folder detected, loading:', savedPath);
+          this.loadSavedFolder();
+        }
+      } catch (e) {
+        console.log('Could not check for new folder:', e);
+      }
+    }
+  }
+
   async loadSavedFolder() {
     try {
       // Check if using Electron
@@ -1882,6 +1900,9 @@ let musicPlayer = null;
 function initMusicPlayer() {
   if (!musicPlayer) {
     musicPlayer = new MusicPlayer();
+  } else {
+    // Check if folder has been set since last time
+    musicPlayer.checkForNewFolder();
   }
   return musicPlayer;
 }
