@@ -14,7 +14,6 @@ class MusicPlayer {
 
     this.initializeElements();
     this.attachEventListeners();
-    this.renderRecentlyPlayed();
     this.loadSavedFolder();
     this.restorePlaybackState();
   }
@@ -54,9 +53,12 @@ class MusicPlayer {
     this.musicContent = document.querySelector('.music-content');
     this.musicFolderPath = document.getElementById('musicFolderPath');
 
+    // Sync button
+    this.syncLibraryBtn = document.getElementById('syncLibraryBtn');
+
     // State
     this.sortBy = 'title';
-    this.sidebarVisible = true;
+    this.sidebarVisible = false;
     this.viewMode = 'flat'; // 'flat', 'artist', 'album'
     this.currentArtist = null;
     this.currentAlbum = null;
@@ -70,12 +72,6 @@ class MusicPlayer {
     // Context menu
     this.contextMenu = document.getElementById('trackContextMenu');
     this.contextMenuTrackIndex = null;
-
-    // Recently played
-    this.recentlyPlayedSection = document.getElementById('recentlyPlayedSection');
-    this.recentlyPlayedList = document.getElementById('recentlyPlayedList');
-    this.clearHistoryBtn = document.getElementById('clearHistoryBtn');
-    this.recentlyPlayed = this.loadRecentlyPlayed();
 
     // On-screen keyboard
     this.onscreenKeyboard = document.getElementById('onscreenKeyboard');
@@ -116,6 +112,9 @@ class MusicPlayer {
     // Folder selection
     this.folderSelectBtn.addEventListener('click', () => this.selectFolder());
 
+    // Sync/rescan library
+    this.syncLibraryBtn.addEventListener('click', () => this.rescanLibrary());
+
     // Sort control
     this.sortSelect.addEventListener('change', (e) => this.changeSortOrder(e.target.value));
 
@@ -133,13 +132,22 @@ class MusicPlayer {
     document.addEventListener('click', () => this.hideContextMenu());
     this.contextMenu.addEventListener('click', (e) => this.handleContextMenuClick(e));
 
-    // Recently played
-    this.clearHistoryBtn.addEventListener('click', () => this.clearRecentlyPlayed());
-
     // On-screen keyboard
     this.searchInput.addEventListener('focus', () => this.showKeyboard());
     this.searchInput.addEventListener('click', () => this.showKeyboard());
     this.keyboardClose.addEventListener('click', () => this.hideKeyboard());
+
+    // Close keyboard when clicking outside
+    document.addEventListener('click', (e) => {
+      if (this.onscreenKeyboard.style.display === 'block') {
+        const isClickInsideKeyboard = this.onscreenKeyboard.contains(e.target);
+        const isClickOnSearchInput = this.searchInput.contains(e.target);
+
+        if (!isClickInsideKeyboard && !isClickOnSearchInput) {
+          this.hideKeyboard();
+        }
+      }
+    });
 
     // Keyboard key clicks
     const keyButtons = this.onscreenKeyboard.querySelectorAll('.key-btn');
@@ -227,6 +235,35 @@ class MusicPlayer {
       await store.put({ id: 'musicFolder', handle: dirHandle });
     } catch (error) {
       console.error('Error saving folder handle:', error);
+    }
+  }
+
+  async rescanLibrary() {
+    // Rescan the currently selected music folder
+    if (!this.musicFolder) {
+      console.log('No music folder selected');
+      return;
+    }
+
+    // Show visual feedback
+    this.syncLibraryBtn.classList.add('spinning');
+    this.syncLibraryBtn.disabled = true;
+
+    try {
+      if (typeof ipcRenderer !== 'undefined') {
+        // Electron: rescan using file path
+        await this.scanMusicFolderElectron(this.musicFolder);
+      } else if (this.folderHandle) {
+        // Web: rescan using folder handle
+        await this.scanMusicFolder(this.folderHandle);
+      }
+      console.log('Library rescan complete');
+    } catch (error) {
+      console.error('Error rescanning library:', error);
+    } finally {
+      // Remove visual feedback
+      this.syncLibraryBtn.classList.remove('spinning');
+      this.syncLibraryBtn.disabled = false;
     }
   }
 
@@ -480,21 +517,30 @@ class MusicPlayer {
       // Use jsmediatags library if available, otherwise use basic file info
       if (window.jsmediatags) {
         console.log('Extracting metadata for:', track.name);
+
+        // Read file as ArrayBuffer for better compatibility
+        const arrayBuffer = await track.file.arrayBuffer();
+
         await new Promise((resolve) => {
-          window.jsmediatags.read(track.file, {
+          window.jsmediatags.read(arrayBuffer, {
             onSuccess: (tag) => {
-              console.log('Metadata found:', tag.tags);
+              console.log('Metadata found for', track.name);
+              console.log('Picture data:', tag.tags.picture ? 'Found' : 'Not found');
+              if (tag.tags.picture) {
+                console.log('Picture format:', tag.tags.picture.format);
+                console.log('Picture data length:', tag.tags.picture.data.length);
+              }
               track.metadata = {
                 title: tag.tags.title || track.name,
                 artist: tag.tags.artist || 'Unknown Artist',
                 album: tag.tags.album || 'Unknown Album',
                 picture: tag.tags.picture
               };
-              console.log('Stored metadata:', track.metadata);
+              console.log('Stored metadata with picture:', !!track.metadata.picture);
               resolve();
             },
             onError: (error) => {
-              console.log('Metadata read error for', track.name, ':', error);
+              console.error('Metadata read error for', track.name, ':', error);
               track.metadata = this.getBasicMetadata(track.name);
               resolve();
             }
@@ -664,13 +710,11 @@ class MusicPlayer {
 
   toggleSidebar() {
     this.sidebarVisible = !this.sidebarVisible;
-    
+
     if (this.sidebarVisible) {
-      this.musicContent.classList.remove('sidebar-collapsed');
-      this.toggleSidebarBtn.classList.remove('sidebar-hidden');
+      this.musicContent.classList.add('sidebar-expanded');
     } else {
-      this.musicContent.classList.add('sidebar-collapsed');
-      this.toggleSidebarBtn.classList.add('sidebar-hidden');
+      this.musicContent.classList.remove('sidebar-expanded');
     }
   }
 
@@ -1066,9 +1110,6 @@ class MusicPlayer {
     this.currentIndex = index;
     const track = this.playlist[index];
 
-    // Add to recently played
-    this.addToRecentlyPlayed(track);
-
     console.log('Loading track:', track.name);
     console.log('Was playing:', wasPlaying);
     console.log('Should auto-play:', this.shouldAutoPlay);
@@ -1161,14 +1202,19 @@ class MusicPlayer {
 
     // Update album art
     if (metadata.picture) {
-      console.log('Album art found');
+      console.log('Album art found, converting to base64...');
       const { data, format } = metadata.picture;
+      console.log('Data type:', data instanceof Uint8Array ? 'Uint8Array' : typeof data);
+      console.log('Format:', format);
       const base64 = this.arrayBufferToBase64(data);
+      console.log('Base64 length:', base64.length);
       this.albumArt.src = `data:${format};base64,${base64}`;
       this.albumArt.classList.add('visible');
+      console.log('Album art set successfully');
     } else {
-      console.log('No album art found');
+      console.log('No album art found in metadata');
       this.albumArt.classList.remove('visible');
+      this.albumArt.src = '';
     }
   }
 
@@ -1741,133 +1787,6 @@ class MusicPlayer {
     this.renderPlaylist();
   }
 
-  loadRecentlyPlayed() {
-    try {
-      const saved = localStorage.getItem('recentlyPlayed');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error loading recently played:', error);
-      return [];
-    }
-  }
-
-  saveRecentlyPlayed() {
-    try {
-      localStorage.setItem('recentlyPlayed', JSON.stringify(this.recentlyPlayed));
-    } catch (error) {
-      console.error('Error saving recently played:', error);
-    }
-  }
-
-  addToRecentlyPlayed(track) {
-    const recentTrack = {
-      name: track.name,
-      path: track.path,
-      filePath: track.filePath,
-      metadata: track.metadata,
-      timestamp: Date.now()
-    };
-
-    // Remove if already exists
-    this.recentlyPlayed = this.recentlyPlayed.filter(t =>
-      (t.path !== track.path && t.filePath !== track.filePath)
-    );
-
-    // Add to beginning
-    this.recentlyPlayed.unshift(recentTrack);
-
-    // Keep only last 10
-    this.recentlyPlayed = this.recentlyPlayed.slice(0, 10);
-
-    this.saveRecentlyPlayed();
-    this.renderRecentlyPlayed();
-  }
-
-  renderRecentlyPlayed() {
-    if (this.recentlyPlayed.length === 0) {
-      this.recentlyPlayedSection.style.display = 'none';
-      return;
-    }
-
-    this.recentlyPlayedSection.style.display = 'block';
-    this.recentlyPlayedList.innerHTML = '';
-
-    this.recentlyPlayed.forEach(recentTrack => {
-      const item = document.createElement('div');
-      item.className = 'recent-track-item';
-
-      const thumb = document.createElement('div');
-      thumb.className = 'recent-track-thumb';
-
-      if (recentTrack.metadata?.picture) {
-        const { data, format } = recentTrack.metadata.picture;
-        const base64 = this.arrayBufferToBase64(data);
-        const img = document.createElement('img');
-        img.src = `data:${format};base64,${base64}`;
-        thumb.appendChild(img);
-      } else {
-        thumb.textContent = '🎵';
-      }
-
-      const info = document.createElement('div');
-      info.className = 'recent-track-info';
-
-      const name = document.createElement('div');
-      name.className = 'recent-track-name';
-      name.textContent = recentTrack.metadata?.title || recentTrack.name;
-
-      const artist = document.createElement('div');
-      artist.className = 'recent-track-artist';
-      artist.textContent = recentTrack.metadata?.artist || 'Unknown Artist';
-
-      info.appendChild(name);
-      info.appendChild(artist);
-
-      const time = document.createElement('div');
-      time.className = 'recent-track-time';
-      time.textContent = this.formatTimeAgo(recentTrack.timestamp);
-
-      item.appendChild(thumb);
-      item.appendChild(info);
-      item.appendChild(time);
-
-      // Click to play
-      item.addEventListener('click', () => {
-        const trackIndex = this.playlist.findIndex(t =>
-          t.path === recentTrack.path || t.filePath === recentTrack.filePath
-        );
-        if (trackIndex >= 0) {
-          this.shouldAutoPlay = true;
-          this.loadTrack(trackIndex);
-        }
-      });
-
-      this.recentlyPlayedList.appendChild(item);
-    });
-  }
-
-  clearRecentlyPlayed() {
-    this.recentlyPlayed = [];
-    this.saveRecentlyPlayed();
-    this.renderRecentlyPlayed();
-  }
-
-  formatTimeAgo(timestamp) {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-
-    if (seconds < 60) return 'Just now';
-
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-
-    return 'Over a week ago';
-  }
 
   showKeyboard() {
     this.onscreenKeyboard.style.display = 'block';
