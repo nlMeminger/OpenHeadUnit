@@ -201,28 +201,30 @@
 
                         <!-- Playlist Sidebar -->
                         <div class="music-sidebar">
-                            <div class="sidebar-header">
-                                <h3>Library</h3>
-                                <button class="folder-select-btn" id="folderSelectBtn">📁 Select</button>
-                            </div>
+                            <div class="music-folder-path" id="musicFolderPath" style="display: none;">No folder selected</div>
+                            <button class="folder-select-btn-small" id="folderSelectBtn" style="display: none;"></button>
 
-                            <div class="music-folder-display" id="musicFolderPath">
-                                No folder selected
-                            </div>
+                            <div class="sidebar-header-section">
+                                <div class="sidebar-title-row">
+                                    <h3 class="sidebar-title">Library</h3>
+                                    <button class="sync-library-btn" id="syncLibraryBtn" title="Rescan library">🔄</button>
+                                </div>
 
-                            <div class="sidebar-controls">
-                                <div class="sort-controls">
-                                    <label>Sort:</label>
-                                    <select class="sort-select" id="sortSelect">
+                                <div class="sidebar-compact-header">
+                                    <div class="search-container">
+                                        <input type="text" class="search-input" id="playlistSearch" placeholder="Search library..." readonly>
+                                        <button class="search-clear" id="searchClear" style="display: none;">×</button>
+                                    </div>
+                                    <select class="compact-sort-select" id="sortSelect">
                                         <option value="title">Title</option>
                                         <option value="artist">Artist</option>
                                         <option value="album">Album</option>
                                     </select>
                                 </div>
-                            </div>
 
-                            <div class="playlist-stats" id="playlistStats">
-                                <span>0 tracks</span>
+                                <div class="playlist-stats" id="playlistStats">
+                                    <span>0 tracks</span>
+                                </div>
                             </div>
 
                             <div class="playlist-container" id="playlistContainer">
@@ -232,6 +234,64 @@
                                     <p class="empty-hint">Select a folder with audio files</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Context Menu -->
+                    <div class="context-menu" id="trackContextMenu" style="display: none;">
+                        <div class="context-menu-item" data-action="play-next">▶ Play Next</div>
+                        <div class="context-menu-item" data-action="go-to-artist">👤 Go to Artist</div>
+                        <div class="context-menu-item" data-action="go-to-album">💿 Go to Album</div>
+                    </div>
+
+                    <!-- On-Screen Keyboard -->
+                    <div class="onscreen-keyboard" id="onscreenKeyboard" style="display: none;">
+                        <div class="keyboard-row">
+                            <button class="key-btn" data-key="1">1</button>
+                            <button class="key-btn" data-key="2">2</button>
+                            <button class="key-btn" data-key="3">3</button>
+                            <button class="key-btn" data-key="4">4</button>
+                            <button class="key-btn" data-key="5">5</button>
+                            <button class="key-btn" data-key="6">6</button>
+                            <button class="key-btn" data-key="7">7</button>
+                            <button class="key-btn" data-key="8">8</button>
+                            <button class="key-btn" data-key="9">9</button>
+                            <button class="key-btn" data-key="0">0</button>
+                        </div>
+                        <div class="keyboard-row">
+                            <button class="key-btn" data-key="q">Q</button>
+                            <button class="key-btn" data-key="w">W</button>
+                            <button class="key-btn" data-key="e">E</button>
+                            <button class="key-btn" data-key="r">R</button>
+                            <button class="key-btn" data-key="t">T</button>
+                            <button class="key-btn" data-key="y">Y</button>
+                            <button class="key-btn" data-key="u">U</button>
+                            <button class="key-btn" data-key="i">I</button>
+                            <button class="key-btn" data-key="o">O</button>
+                            <button class="key-btn" data-key="p">P</button>
+                        </div>
+                        <div class="keyboard-row">
+                            <button class="key-btn" data-key="a">A</button>
+                            <button class="key-btn" data-key="s">S</button>
+                            <button class="key-btn" data-key="d">D</button>
+                            <button class="key-btn" data-key="f">F</button>
+                            <button class="key-btn" data-key="g">G</button>
+                            <button class="key-btn" data-key="h">H</button>
+                            <button class="key-btn" data-key="j">J</button>
+                            <button class="key-btn" data-key="k">K</button>
+                            <button class="key-btn" data-key="l">L</button>
+                            <button class="key-btn key-backspace" data-key="backspace">⌫</button>
+                        </div>
+                        <div class="keyboard-row">
+                            <button class="key-btn" data-key="z">Z</button>
+                            <button class="key-btn" data-key="x">X</button>
+                            <button class="key-btn" data-key="c">C</button>
+                            <button class="key-btn" data-key="v">V</button>
+                            <button class="key-btn" data-key="b">B</button>
+                            <button class="key-btn" data-key="n">N</button>
+                            <button class="key-btn" data-key="m">M</button>
+                            <button class="key-btn key-space" data-key=" ">Space</button>
+                            <button class="key-btn key-close" id="keyboardClose">Close</button>
                         </div>
                     </div>
                 </div>
@@ -276,6 +336,17 @@
                             <div class="setting-item">
                                 <label>Auto Gain Control</label>
                                 <input type="checkbox" id="autoGainControl">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="section-title">Music</h3>
+                            <div class="setting-item">
+                                <label>Music Folder</label>
+                                <div class="music-folder-setting">
+                                    <input type="text" id="musicFolderSetting" readonly placeholder="No folder selected">
+                                    <button id="selectMusicFolderBtn" class="folder-select-btn">📁 Select</button>
+                                </div>
                             </div>
                         </div>
 

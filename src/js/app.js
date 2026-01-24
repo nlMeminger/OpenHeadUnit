@@ -404,7 +404,20 @@ appTiles.forEach(tile => {
     tile.addEventListener('click', () => {
         const app = tile.getAttribute('data-app');
         console.log('App tile clicked:', app);
+
+        // Hide all interfaces first
         homeScreen.style.display = 'none';
+        radioInterface.classList.remove('active');
+        carplayInterface.classList.remove('active');
+        carplayInterface.classList.remove('fullscreen');
+        settingsInterface.classList.remove('active');
+        musicInterface.classList.remove('active');
+
+        // Hide keyboard and context menu when switching interfaces
+        const keyboard = document.getElementById('onscreenKeyboard');
+        const contextMenu = document.getElementById('trackContextMenu');
+        if (keyboard) keyboard.style.display = 'none';
+        if (contextMenu) contextMenu.style.display = 'none';
 
         if (app === 'radio') {
             console.log('Opening radio interface');
@@ -427,6 +440,13 @@ appTiles.forEach(tile => {
 const musicBackBtn = document.getElementById('musicBackBtn');
 musicBackBtn.addEventListener('click', () => {
     console.log('Closing music interface');
+
+    // Hide keyboard and context menu when leaving music interface
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
+
     musicInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
 });
@@ -438,6 +458,12 @@ backBtn.addEventListener('click', () => {
     homeScreen.style.display = 'grid';
     ipcRenderer.send('stop-radio');
 
+    // Hide any music interface overlays
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
+
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
     navBtns[0].classList.add('active'); // Activate home button
@@ -447,6 +473,12 @@ settingsBackBtn.addEventListener('click', () => {
     console.log('Settings back button clicked');
     settingsInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
+
+    // Hide any music interface overlays
+    const keyboard = document.getElementById('onscreenKeyboard');
+    const contextMenu = document.getElementById('trackContextMenu');
+    if (keyboard) keyboard.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
 
     // Update nav bar
     navBtns.forEach(b => b.classList.remove('active'));
@@ -466,6 +498,13 @@ navBtns.forEach((btn, index) => {
         carplayInterface.classList.remove('active');
         carplayInterface.classList.remove('fullscreen');
         settingsInterface.classList.remove('active');
+        musicInterface.classList.remove('active');
+
+        // Hide keyboard and context menu when switching interfaces
+        const keyboard = document.getElementById('onscreenKeyboard');
+        const contextMenu = document.getElementById('trackContextMenu');
+        if (keyboard) keyboard.style.display = 'none';
+        if (contextMenu) contextMenu.style.display = 'none';
 
         // Show appropriate screen based on button index
         switch (index) {
@@ -588,6 +627,12 @@ function loadSettings() {
     document.getElementById('showSeconds').checked = settings.display.showSeconds !== false; // Default to true
     document.getElementById('temperatureUnit').value = settings.display.temperatureUnit || 'fahrenheit';
 
+    // Music settings
+    const musicFolderInput = document.getElementById('musicFolderSetting');
+    if (musicFolderInput) {
+        musicFolderInput.value = settings.music?.folderPath || '';
+    }
+
     // CarPlay settings
     document.getElementById('carplayWidth').value = settings.carplay.width || '';
     document.getElementById('carplayHeight').value = settings.carplay.height || '';
@@ -639,6 +684,12 @@ function saveSettings() {
     settings['carplay.boxName'] = document.getElementById('carplayBoxName').value || 'nodePlay';
     settings['carplay.hand'] = parseInt(document.getElementById('carplayHand').value);
 
+    // Music settings
+    const musicFolderInput = document.getElementById('musicFolderSetting');
+    if (musicFolderInput) {
+        settings['music.folderPath'] = musicFolderInput.value || null;
+    }
+
     // Get radio presets
     const presetInputs = document.querySelectorAll('.preset-editor-item input');
     const presets = [];
@@ -689,6 +740,76 @@ function updateRadioPresets() {
 }
 
 document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+// Music folder select button in settings
+const selectMusicFolderBtn = document.getElementById('selectMusicFolderBtn');
+if (selectMusicFolderBtn) {
+    selectMusicFolderBtn.addEventListener('click', async () => {
+        console.log('Select music folder button clicked');
+        try {
+            // Use ipcRenderer directly (available as global from controls.js)
+            if (typeof ipcRenderer !== 'undefined') {
+                console.log('Using ipcRenderer to select folder');
+                const result = await ipcRenderer.invoke('select-music-folder');
+                console.log('Folder selection result:', result);
+                if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                    const folderPath = result.filePaths[0];
+                    document.getElementById('musicFolderSetting').value = folderPath;
+                    console.log('Set folder path to:', folderPath);
+
+                    // Save immediately to settings so music player can find it
+                    ipcRenderer.sendSync('update-settings', {
+                        'music.folderPath': folderPath
+                    });
+                    console.log('Saved folder path to settings');
+
+                    // Show scanning status
+                    const statusDiv = document.getElementById('settingsStatus');
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Scanning music library...';
+                        statusDiv.className = 'settings-status';
+                    }
+
+                    // Trigger library scan immediately
+                    try {
+                        console.log('Starting library scan for:', folderPath);
+                        const files = await ipcRenderer.invoke('get-music-files', folderPath);
+                        const fileCount = files ? files.length : 0;
+                        console.log(`Library scan complete: ${fileCount} files found`);
+
+                        // Show success with file count
+                        if (statusDiv) {
+                            statusDiv.textContent = `Music folder saved! Found ${fileCount} audio file${fileCount !== 1 ? 's' : ''}.`;
+                            statusDiv.className = 'settings-status success';
+                            setTimeout(() => {
+                                statusDiv.textContent = '';
+                                statusDiv.className = 'settings-status';
+                            }, 5000);
+                        }
+                    } catch (scanError) {
+                        console.error('Error scanning library:', scanError);
+                        if (statusDiv) {
+                            statusDiv.textContent = 'Music folder saved, but scan failed. Try opening Media Player.';
+                            statusDiv.className = 'settings-status';
+                            setTimeout(() => {
+                                statusDiv.textContent = '';
+                                statusDiv.className = 'settings-status';
+                            }, 5000);
+                        }
+                    }
+                }
+            } else {
+                console.log('ipcRenderer not available');
+                alert('Folder selection requires Electron environment');
+            }
+        } catch (error) {
+            console.error('Error selecting folder:', error);
+            alert('Error selecting folder: ' + error.message);
+        }
+    });
+} else {
+    console.warn('selectMusicFolderBtn element not found');
+}
 
 document.getElementById('resetSettingsBtn').addEventListener('click', () => {
     if (confirm('Are you sure you want to reset all settings to defaults?')) {

@@ -10,10 +10,12 @@ class MusicPlayer {
     this.musicFolder = null;
     this.folderHandle = null;
     this.shouldAutoPlay = false;
+    this.volumeBeforeMute = null;
 
     this.initializeElements();
     this.attachEventListeners();
     this.loadSavedFolder();
+    this.restorePlaybackState();
   }
 
   initializeElements() {
@@ -40,6 +42,7 @@ class MusicPlayer {
     // Volume
     this.volumeSlider = document.getElementById('volumeSlider');
     this.volumeValue = document.getElementById('volumeValue');
+    this.volumeIcon = document.querySelector('.volume-icon');
 
     // Playlist
     this.playlistContainer = document.getElementById('playlistContainer');
@@ -50,13 +53,29 @@ class MusicPlayer {
     this.musicContent = document.querySelector('.music-content');
     this.musicFolderPath = document.getElementById('musicFolderPath');
 
+    // Sync button
+    this.syncLibraryBtn = document.getElementById('syncLibraryBtn');
+
     // State
     this.sortBy = 'title';
-    this.sidebarVisible = true;
+    this.sidebarVisible = false;
     this.viewMode = 'flat'; // 'flat', 'artist', 'album'
     this.currentArtist = null;
     this.currentAlbum = null;
     this.viewStack = []; // For breadcrumb navigation
+    this.searchQuery = '';
+
+    // Search elements
+    this.searchInput = document.getElementById('playlistSearch');
+    this.searchClear = document.getElementById('searchClear');
+
+    // Context menu
+    this.contextMenu = document.getElementById('trackContextMenu');
+    this.contextMenuTrackIndex = null;
+
+    // On-screen keyboard
+    this.onscreenKeyboard = document.getElementById('onscreenKeyboard');
+    this.keyboardClose = document.getElementById('keyboardClose');
   }
 
   attachEventListeners() {
@@ -68,24 +87,80 @@ class MusicPlayer {
     this.repeatBtn.addEventListener('click', () => this.cycleRepeat());
 
     // Audio events
-    this.audio.addEventListener('timeupdate', () => this.updateProgress());
+    this.audio.addEventListener('timeupdate', () => {
+      this.updateProgress();
+      this.savePlaybackState(); // Save state periodically
+    });
     this.audio.addEventListener('ended', () => this.onTrackEnded());
     this.audio.addEventListener('loadedmetadata', () => this.onMetadataLoaded());
 
     // Progress bar
     this.progressBar.addEventListener('click', (e) => this.seekTo(e));
+    this.progressBar.addEventListener('mousemove', (e) => this.showProgressPreview(e));
+    this.progressBar.addEventListener('mouseleave', () => this.hideProgressPreview());
 
     // Volume
     this.volumeSlider.addEventListener('input', (e) => this.setVolume(e.target.value));
 
+    // Volume icon click to mute/unmute
+    this.volumeIcon.addEventListener('click', () => this.toggleMute());
+
+    // Volume scroll wheel support
+    this.volumeIcon.addEventListener('wheel', (e) => this.handleVolumeScroll(e), { passive: false });
+    this.volumeSlider.addEventListener('wheel', (e) => this.handleVolumeScroll(e), { passive: false });
+
     // Folder selection
     this.folderSelectBtn.addEventListener('click', () => this.selectFolder());
+
+    // Sync/rescan library
+    this.syncLibraryBtn.addEventListener('click', () => this.rescanLibrary());
 
     // Sort control
     this.sortSelect.addEventListener('change', (e) => this.changeSortOrder(e.target.value));
 
     // Sidebar toggle
     this.toggleSidebarBtn.addEventListener('click', () => this.toggleSidebar());
+
+    // Search functionality
+    this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+    this.searchClear.addEventListener('click', () => this.clearSearch());
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+
+    // Context menu
+    document.addEventListener('click', () => this.hideContextMenu());
+    this.contextMenu.addEventListener('click', (e) => this.handleContextMenuClick(e));
+
+    // On-screen keyboard
+    this.searchInput.addEventListener('focus', () => this.showKeyboard());
+    this.searchInput.addEventListener('click', () => this.showKeyboard());
+    this.keyboardClose.addEventListener('click', () => this.hideKeyboard());
+
+    // Close keyboard when clicking outside
+    document.addEventListener('click', (e) => {
+      if (this.onscreenKeyboard.style.display === 'block') {
+        const isClickInsideKeyboard = this.onscreenKeyboard.contains(e.target);
+        const isClickOnSearchInput = this.searchInput.contains(e.target);
+
+        if (!isClickInsideKeyboard && !isClickOnSearchInput) {
+          this.hideKeyboard();
+        }
+      }
+    });
+
+    // Keyboard key clicks
+    const keyButtons = this.onscreenKeyboard.querySelectorAll('.key-btn');
+    keyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        if (key === 'backspace') {
+          this.handleKeyboardBackspace();
+        } else if (key) {
+          this.handleKeyboardInput(key);
+        }
+      });
+    });
 
     // Set initial volume
     this.setVolume(this.volumeSlider.value);
@@ -94,9 +169,9 @@ class MusicPlayer {
   async selectFolder() {
     try {
       // Check if running in Electron
-      if (window.electronAPI && window.electronAPI.selectMusicFolder) {
+      if (typeof ipcRenderer !== 'undefined') {
         // Use Electron's native dialog
-        const result = await window.electronAPI.selectMusicFolder();
+        const result = await ipcRenderer.invoke('select-music-folder');
         if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
           return;
         }
@@ -107,8 +182,19 @@ class MusicPlayer {
         // Update UI
         this.musicFolderPath.textContent = `📁 ${folderPath}`;
 
-        // Save folder path to localStorage
+        // Save folder path to localStorage (backup)
         localStorage.setItem('musicFolderPath', folderPath);
+
+        // Save to settings if available
+        try {
+          if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.sendSync('update-settings', {
+              'music.folderPath': folderPath
+            });
+          }
+        } catch (e) {
+          console.log('Could not save to settings:', e);
+        }
 
         // Scan for music files using Electron API
         await this.scanMusicFolderElectron(folderPath);
@@ -152,12 +238,71 @@ class MusicPlayer {
     }
   }
 
+  async rescanLibrary() {
+    // Rescan the currently selected music folder
+    if (!this.musicFolder) {
+      console.log('No music folder selected');
+      return;
+    }
+
+    // Show visual feedback
+    this.syncLibraryBtn.classList.add('spinning');
+    this.syncLibraryBtn.disabled = true;
+
+    try {
+      if (typeof ipcRenderer !== 'undefined') {
+        // Electron: rescan using file path
+        await this.scanMusicFolderElectron(this.musicFolder);
+      } else if (this.folderHandle) {
+        // Web: rescan using folder handle
+        await this.scanMusicFolder(this.folderHandle);
+      }
+      console.log('Library rescan complete');
+    } catch (error) {
+      console.error('Error rescanning library:', error);
+    } finally {
+      // Remove visual feedback
+      this.syncLibraryBtn.classList.remove('spinning');
+      this.syncLibraryBtn.disabled = false;
+    }
+  }
+
+  checkForNewFolder() {
+    // Check if folder has been set since player was initialized
+    if (typeof ipcRenderer !== 'undefined' && this.playlist.length === 0) {
+      try {
+        const settings = ipcRenderer.sendSync('get-settings');
+        const savedPath = settings?.music?.folderPath;
+
+        // If there's a folder path and we don't have one loaded, load it
+        if (savedPath && savedPath !== this.musicFolder) {
+          console.log('New folder detected, loading:', savedPath);
+          this.loadSavedFolder();
+        }
+      } catch (e) {
+        console.log('Could not check for new folder:', e);
+      }
+    }
+  }
+
   async loadSavedFolder() {
     try {
       // Check if using Electron
-      if (window.electronAPI && window.electronAPI.getMusicFiles) {
-        // Try to load from localStorage
-        const savedPath = localStorage.getItem('musicFolderPath');
+      if (typeof ipcRenderer !== 'undefined') {
+        // First try to load from settings
+        let savedPath = null;
+        try {
+          const settings = ipcRenderer.sendSync('get-settings');
+          savedPath = settings?.music?.folderPath;
+        } catch (e) {
+          console.log('Could not load music folder from settings, trying localStorage');
+        }
+
+        // Fallback to localStorage if settings not available
+        if (!savedPath) {
+          savedPath = localStorage.getItem('musicFolderPath');
+        }
+
         if (savedPath) {
           this.musicFolder = savedPath;
           this.musicFolderPath.textContent = `📁 ${savedPath}`;
@@ -253,8 +398,12 @@ class MusicPlayer {
       this.renderPlaylist();
       this.updateStats();
 
-      // Auto-load first track if playlist not empty
-      if (this.playlist.length > 0 && this.currentIndex === -1) {
+      // Check for pending state restore
+      if (this.pendingStateRestore) {
+        await this.restorePlaybackState();
+        this.pendingStateRestore = null;
+      } else if (this.playlist.length > 0 && this.currentIndex === -1) {
+        // Auto-load first track if playlist not empty and no state to restore
         this.loadTrack(0);
       }
     } catch (error) {
@@ -283,11 +432,11 @@ class MusicPlayer {
 
   async scanMusicFolderElectron(folderPath) {
     this.playlist = [];
-    
+
     try {
       console.log('Scanning Electron folder for audio files...');
       // Get files from Electron API
-      const files = await window.electronAPI.getMusicFiles(folderPath);
+      const files = await ipcRenderer.invoke('get-music-files', folderPath);
       
       if (!files || files.length === 0) {
         this.renderPlaylist();
@@ -326,8 +475,12 @@ class MusicPlayer {
       // Note: For Electron, we can't pre-load metadata from file paths
       // Metadata will be loaded when each track is played
 
-      // Auto-load first track
-      if (this.playlist.length > 0 && this.currentIndex === -1) {
+      // Check for pending state restore
+      if (this.pendingStateRestore) {
+        await this.restorePlaybackState();
+        this.pendingStateRestore = null;
+      } else if (this.playlist.length > 0 && this.currentIndex === -1) {
+        // Auto-load first track if playlist not empty and no state to restore
         this.loadTrack(0);
       }
     } catch (error) {
@@ -364,21 +517,30 @@ class MusicPlayer {
       // Use jsmediatags library if available, otherwise use basic file info
       if (window.jsmediatags) {
         console.log('Extracting metadata for:', track.name);
+
+        // Read file as ArrayBuffer for better compatibility
+        const arrayBuffer = await track.file.arrayBuffer();
+
         await new Promise((resolve) => {
-          window.jsmediatags.read(track.file, {
+          window.jsmediatags.read(arrayBuffer, {
             onSuccess: (tag) => {
-              console.log('Metadata found:', tag.tags);
+              console.log('Metadata found for', track.name);
+              console.log('Picture data:', tag.tags.picture ? 'Found' : 'Not found');
+              if (tag.tags.picture) {
+                console.log('Picture format:', tag.tags.picture.format);
+                console.log('Picture data length:', tag.tags.picture.data.length);
+              }
               track.metadata = {
                 title: tag.tags.title || track.name,
                 artist: tag.tags.artist || 'Unknown Artist',
                 album: tag.tags.album || 'Unknown Album',
                 picture: tag.tags.picture
               };
-              console.log('Stored metadata:', track.metadata);
+              console.log('Stored metadata with picture:', !!track.metadata.picture);
               resolve();
             },
             onError: (error) => {
-              console.log('Metadata read error for', track.name, ':', error);
+              console.error('Metadata read error for', track.name, ':', error);
               track.metadata = this.getBasicMetadata(track.name);
               resolve();
             }
@@ -548,13 +710,11 @@ class MusicPlayer {
 
   toggleSidebar() {
     this.sidebarVisible = !this.sidebarVisible;
-    
+
     if (this.sidebarVisible) {
-      this.musicContent.classList.remove('sidebar-collapsed');
-      this.toggleSidebarBtn.classList.remove('sidebar-hidden');
+      this.musicContent.classList.add('sidebar-expanded');
     } else {
-      this.musicContent.classList.add('sidebar-collapsed');
-      this.toggleSidebarBtn.classList.add('sidebar-hidden');
+      this.musicContent.classList.remove('sidebar-expanded');
     }
   }
 
@@ -583,20 +743,23 @@ class MusicPlayer {
   }
 
   renderFlatView() {
-    // Show all tracks in a flat list
+    // Show all tracks in a flat list (filtered by search query)
     this.playlist.forEach((track, index) => {
-      const item = this.createTrackElement(track, index);
-      this.playlistContainer.appendChild(item);
+      if (this.filterTrack(track)) {
+        const item = this.createTrackElement(track, index);
+        this.playlistContainer.appendChild(item);
+      }
     });
   }
 
   renderArtistView() {
     if (this.currentArtist && this.currentAlbum) {
-      // Show tracks for this album
+      // Show tracks for this album (filtered by search)
       this.renderBreadcrumb();
-      const tracks = this.playlist.filter(t => 
+      const tracks = this.playlist.filter(t =>
         (t.metadata?.artist || 'Unknown Artist') === this.currentArtist &&
-        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum &&
+        this.filterTrack(t)
       );
       tracks.forEach((track, idx) => {
         const actualIndex = this.playlist.indexOf(track);
@@ -604,29 +767,36 @@ class MusicPlayer {
         this.playlistContainer.appendChild(item);
       });
     } else if (this.currentArtist) {
-      // Show albums for this artist
+      // Show albums for this artist (filtered by search)
       this.renderBreadcrumb();
       const albums = this.getAlbumsForArtist(this.currentArtist);
       albums.forEach(album => {
-        const item = this.createAlbumElement(album, this.currentArtist);
-        this.playlistContainer.appendChild(item);
+        // Only show album if it has matching tracks
+        if (this.hasMatchingTracksInAlbum(this.currentArtist, album.name)) {
+          const item = this.createAlbumElement(album, this.currentArtist);
+          this.playlistContainer.appendChild(item);
+        }
       });
     } else {
-      // Show all artists
+      // Show all artists (filtered by search)
       const artists = this.getAllArtists();
       artists.forEach(artist => {
-        const item = this.createArtistElement(artist);
-        this.playlistContainer.appendChild(item);
+        // Only show artist if they have matching tracks
+        if (this.hasMatchingTracksForArtist(artist.name)) {
+          const item = this.createArtistElement(artist);
+          this.playlistContainer.appendChild(item);
+        }
       });
     }
   }
 
   renderAlbumView() {
     if (this.currentAlbum) {
-      // Show tracks for this album
+      // Show tracks for this album (filtered by search)
       this.renderBreadcrumb();
-      const tracks = this.playlist.filter(t => 
-        (t.metadata?.album || 'Unknown Album') === this.currentAlbum
+      const tracks = this.playlist.filter(t =>
+        (t.metadata?.album || 'Unknown Album') === this.currentAlbum &&
+        this.filterTrack(t)
       );
       tracks.forEach((track, idx) => {
         const actualIndex = this.playlist.indexOf(track);
@@ -634,11 +804,14 @@ class MusicPlayer {
         this.playlistContainer.appendChild(item);
       });
     } else {
-      // Show all albums grouped by artist
+      // Show all albums grouped by artist (filtered by search)
       const albums = this.getAllAlbums();
       albums.forEach(albumInfo => {
-        const item = this.createAlbumGroupElement(albumInfo);
-        this.playlistContainer.appendChild(item);
+        // Only show album if it has matching tracks
+        if (this.hasMatchingTracksInAlbumAny(albumInfo.album)) {
+          const item = this.createAlbumGroupElement(albumInfo);
+          this.playlistContainer.appendChild(item);
+        }
       });
     }
   }
@@ -857,7 +1030,7 @@ class MusicPlayer {
 
     const thumbnail = document.createElement('div');
     thumbnail.className = 'track-thumbnail';
-    
+
     if (track.metadata?.picture) {
       const { data, format } = track.metadata.picture;
       const base64 = this.arrayBufferToBase64(data);
@@ -868,9 +1041,21 @@ class MusicPlayer {
       thumbnail.textContent = '🎵';
     }
 
+    // Add now playing indicator if this is the current track
+    if (index === this.currentIndex) {
+      const nowPlayingIndicator = document.createElement('div');
+      nowPlayingIndicator.className = 'now-playing-indicator';
+      for (let i = 0; i < 3; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'eq-bar';
+        nowPlayingIndicator.appendChild(bar);
+      }
+      thumbnail.appendChild(nowPlayingIndicator);
+    }
+
     const info = document.createElement('div');
     info.className = 'track-info';
-    
+
     const name = document.createElement('div');
     name.className = 'track-name';
     name.textContent = track.metadata?.title || track.name;
@@ -898,6 +1083,12 @@ class MusicPlayer {
       // Set flag to auto-play when track loads
       this.shouldAutoPlay = true;
       await this.loadTrack(index);
+    });
+
+    // Context menu support
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.showContextMenu(e, index);
     });
 
     return item;
@@ -1011,14 +1202,19 @@ class MusicPlayer {
 
     // Update album art
     if (metadata.picture) {
-      console.log('Album art found');
+      console.log('Album art found, converting to base64...');
       const { data, format } = metadata.picture;
+      console.log('Data type:', data instanceof Uint8Array ? 'Uint8Array' : typeof data);
+      console.log('Format:', format);
       const base64 = this.arrayBufferToBase64(data);
+      console.log('Base64 length:', base64.length);
       this.albumArt.src = `data:${format};base64,${base64}`;
       this.albumArt.classList.add('visible');
+      console.log('Album art set successfully');
     } else {
-      console.log('No album art found');
+      console.log('No album art found in metadata');
       this.albumArt.classList.remove('visible');
+      this.albumArt.src = '';
     }
   }
 
@@ -1079,6 +1275,13 @@ class MusicPlayer {
   playPrevious() {
     if (this.playlist.length === 0) return;
 
+    // Smart previous: if more than 3 seconds into track, restart current track
+    if (this.audio.currentTime > 3) {
+      this.audio.currentTime = 0;
+      return;
+    }
+
+    // Otherwise go to previous track
     let newIndex = this.currentIndex - 1;
     if (newIndex < 0) {
       newIndex = this.playlist.length - 1;
@@ -1182,17 +1385,431 @@ class MusicPlayer {
     this.audio.currentTime = percent * this.audio.duration;
   }
 
+  showProgressPreview(e) {
+    if (!this.audio.duration) return;
+
+    // Create tooltip if it doesn't exist
+    if (!this.progressTooltip) {
+      this.progressTooltip = document.createElement('div');
+      this.progressTooltip.className = 'progress-tooltip';
+      this.progressBar.appendChild(this.progressTooltip);
+    }
+
+    const rect = this.progressBar.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const time = percent * this.audio.duration;
+
+    this.progressTooltip.textContent = this.formatTime(time);
+    this.progressTooltip.style.left = `${percent * 100}%`;
+    this.progressTooltip.style.display = 'block';
+  }
+
+  hideProgressPreview() {
+    if (this.progressTooltip) {
+      this.progressTooltip.style.display = 'none';
+    }
+  }
+
   setVolume(value) {
     this.audio.volume = value / 100;
     this.volumeValue.textContent = `${value}%`;
+    this.updateVolumeIcon(value);
+  }
+
+  updateVolumeIcon(value) {
+    if (value == 0) {
+      this.volumeIcon.textContent = '🔇';
+    } else if (value < 50) {
+      this.volumeIcon.textContent = '🔉';
+    } else {
+      this.volumeIcon.textContent = '🔊';
+    }
   }
 
   formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '0:00';
-    
+
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  handleKeyPress(e) {
+    // Don't interfere with typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
+
+    // Check if music interface is active
+    const musicInterface = document.getElementById('musicInterface');
+    if (!musicInterface || !musicInterface.classList.contains('active')) {
+      return;
+    }
+
+    switch(e.key.toLowerCase()) {
+      case ' ':
+        // Space bar: Play/Pause
+        e.preventDefault();
+        this.togglePlay();
+        break;
+
+      case 'arrowright':
+        // Right arrow: Seek forward 5 seconds
+        e.preventDefault();
+        if (this.audio.duration) {
+          this.audio.currentTime = Math.min(this.audio.currentTime + 5, this.audio.duration);
+        }
+        break;
+
+      case 'arrowleft':
+        // Left arrow: Seek backward 5 seconds
+        e.preventDefault();
+        if (this.audio.duration) {
+          this.audio.currentTime = Math.max(this.audio.currentTime - 5, 0);
+        }
+        break;
+
+      case 'n':
+        // N key: Next track
+        e.preventDefault();
+        this.playNext();
+        break;
+
+      case 'p':
+        // P key: Previous track
+        e.preventDefault();
+        this.playPrevious();
+        break;
+
+      case 'm':
+        // M key: Mute/unmute
+        e.preventDefault();
+        this.toggleMute();
+        break;
+
+      case 's':
+        // S key: Toggle shuffle
+        e.preventDefault();
+        this.toggleShuffle();
+        break;
+
+      case 'r':
+        // R key: Cycle repeat modes
+        e.preventDefault();
+        this.cycleRepeat();
+        break;
+
+      case 'l':
+        // L key: Toggle sidebar
+        e.preventDefault();
+        this.toggleSidebar();
+        break;
+    }
+  }
+
+  toggleMute() {
+    if (this.audio.volume > 0) {
+      // Save current volume and mute
+      this.volumeBeforeMute = this.audio.volume * 100;
+      this.setVolume(0);
+      this.volumeSlider.value = 0;
+    } else {
+      // Restore previous volume or set to 70%
+      const restoreVolume = this.volumeBeforeMute || 70;
+      this.setVolume(restoreVolume);
+      this.volumeSlider.value = restoreVolume;
+    }
+  }
+
+  handleVolumeScroll(e) {
+    e.preventDefault();
+    const currentVolume = parseInt(this.volumeSlider.value);
+    const delta = e.deltaY < 0 ? 5 : -5; // Scroll up = increase, scroll down = decrease
+    const newVolume = Math.max(0, Math.min(100, currentVolume + delta));
+
+    this.volumeSlider.value = newVolume;
+    this.setVolume(newVolume);
+  }
+
+  handleSearch(query) {
+    this.searchQuery = query.toLowerCase().trim();
+
+    // Show/hide clear button
+    if (this.searchQuery) {
+      this.searchClear.style.display = 'block';
+    } else {
+      this.searchClear.style.display = 'none';
+    }
+
+    this.renderPlaylist();
+  }
+
+  clearSearch() {
+    this.searchQuery = '';
+    this.searchInput.value = '';
+    this.searchClear.style.display = 'none';
+    this.renderPlaylist();
+  }
+
+  filterTrack(track) {
+    if (!this.searchQuery) return true;
+
+    const metadata = track.metadata || {};
+    const title = (metadata.title || track.name || '').toLowerCase();
+    const artist = (metadata.artist || '').toLowerCase();
+    const album = (metadata.album || '').toLowerCase();
+
+    return title.includes(this.searchQuery) ||
+           artist.includes(this.searchQuery) ||
+           album.includes(this.searchQuery);
+  }
+
+  hasMatchingTracksForArtist(artistName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.artist || 'Unknown Artist') === artistName &&
+      this.filterTrack(t)
+    );
+  }
+
+  hasMatchingTracksInAlbum(artistName, albumName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.artist || 'Unknown Artist') === artistName &&
+      (t.metadata?.album || 'Unknown Album') === albumName &&
+      this.filterTrack(t)
+    );
+  }
+
+  hasMatchingTracksInAlbumAny(albumName) {
+    if (!this.searchQuery) return true;
+    return this.playlist.some(t =>
+      (t.metadata?.album || 'Unknown Album') === albumName &&
+      this.filterTrack(t)
+    );
+  }
+
+  savePlaybackState() {
+    // Throttle saves to avoid excessive localStorage writes
+    if (this.saveStateTimeout) return;
+
+    this.saveStateTimeout = setTimeout(() => {
+      if (this.currentIndex >= 0 && this.playlist.length > 0) {
+        const state = {
+          currentIndex: this.currentIndex,
+          currentTime: this.audio.currentTime,
+          isPlaying: this.isPlaying,
+          volume: this.audio.volume * 100,
+          isShuffle: this.isShuffle,
+          repeatMode: this.repeatMode,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('musicPlayerState', JSON.stringify(state));
+      }
+      this.saveStateTimeout = null;
+    }, 2000); // Save every 2 seconds max
+  }
+
+  async restorePlaybackState() {
+    try {
+      const savedState = localStorage.getItem('musicPlayerState');
+      if (!savedState) return;
+
+      const state = JSON.parse(savedState);
+
+      // Only restore if state is from within the last 7 days
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      if (state.timestamp < sevenDaysAgo) {
+        localStorage.removeItem('musicPlayerState');
+        return;
+      }
+
+      // Wait for playlist to load
+      if (this.playlist.length === 0) {
+        // Will try again after folder loads
+        this.pendingStateRestore = state;
+        return;
+      }
+
+      // Restore state
+      if (state.currentIndex < this.playlist.length) {
+        await this.loadTrack(state.currentIndex);
+
+        // Restore playback position
+        if (state.currentTime) {
+          this.audio.currentTime = state.currentTime;
+        }
+
+        // Restore other settings
+        if (state.volume !== undefined) {
+          this.volumeSlider.value = state.volume;
+          this.setVolume(state.volume);
+        }
+
+        if (state.isShuffle !== undefined) {
+          this.isShuffle = state.isShuffle;
+          if (this.isShuffle) {
+            this.shuffleBtn.classList.add('active');
+          }
+        }
+
+        if (state.repeatMode !== undefined) {
+          this.repeatMode = state.repeatMode;
+          this.updateRepeatButton();
+        }
+
+        // Don't auto-play unless it was playing before
+        if (!state.isPlaying) {
+          this.audio.pause();
+          this.isPlaying = false;
+          this.playBtn.textContent = '▶';
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring playback state:', error);
+    }
+  }
+
+  updateRepeatButton() {
+    this.repeatBtn.classList.remove('active');
+    if (this.repeatMode === 1) {
+      this.repeatBtn.textContent = '🔁';
+      this.repeatBtn.classList.add('active');
+    } else if (this.repeatMode === 2) {
+      this.repeatBtn.textContent = '🔂';
+      this.repeatBtn.classList.add('active');
+    } else {
+      this.repeatBtn.textContent = '🔁';
+    }
+  }
+
+  showContextMenu(e, trackIndex) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    this.contextMenuTrackIndex = trackIndex;
+    const track = this.playlist[trackIndex];
+
+    // Position the context menu
+    this.contextMenu.style.display = 'block';
+    this.contextMenu.style.left = `${e.pageX}px`;
+    this.contextMenu.style.top = `${e.pageY}px`;
+
+    // Adjust position if menu goes off screen
+    setTimeout(() => {
+      const rect = this.contextMenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        this.contextMenu.style.left = `${window.innerWidth - rect.width - 10}px`;
+      }
+      if (rect.bottom > window.innerHeight) {
+        this.contextMenu.style.top = `${window.innerHeight - rect.height - 10}px`;
+      }
+    }, 0);
+  }
+
+  hideContextMenu() {
+    if (this.contextMenu) {
+      this.contextMenu.style.display = 'none';
+    }
+  }
+
+  handleContextMenuClick(e) {
+    e.stopPropagation();
+    const action = e.target.dataset.action;
+    if (!action || this.contextMenuTrackIndex === null) return;
+
+    const track = this.playlist[this.contextMenuTrackIndex];
+    if (!track) return;
+
+    switch(action) {
+      case 'play-next':
+        this.playTrackNext(this.contextMenuTrackIndex);
+        break;
+
+      case 'go-to-artist':
+        this.goToArtist(track.metadata?.artist || 'Unknown Artist');
+        break;
+
+      case 'go-to-album':
+        this.goToAlbum(track.metadata?.album || 'Unknown Album');
+        break;
+    }
+
+    this.hideContextMenu();
+  }
+
+  playTrackNext(trackIndex) {
+    // Insert track after current playing track
+    if (this.currentIndex >= 0) {
+      const track = this.playlist[trackIndex];
+      // Remove from current position
+      this.playlist.splice(trackIndex, 1);
+
+      // Adjust current index if needed
+      let insertIndex = this.currentIndex;
+      if (trackIndex <= this.currentIndex) {
+        insertIndex = this.currentIndex;
+      } else {
+        insertIndex = this.currentIndex + 1;
+      }
+
+      // Insert after current track
+      this.playlist.splice(insertIndex, 0, track);
+
+      // Update current index
+      this.currentIndex = this.playlist.findIndex(t => t === this.playlist[this.currentIndex]);
+
+      this.renderPlaylist();
+    }
+  }
+
+  goToArtist(artistName) {
+    this.sortBy = 'artist';
+    this.sortSelect.value = 'artist';
+    this.viewMode = 'artist';
+    this.currentArtist = artistName;
+    this.currentAlbum = null;
+    this.searchQuery = '';
+    this.searchInput.value = '';
+    this.searchClear.style.display = 'none';
+    this.renderPlaylist();
+  }
+
+  goToAlbum(albumName) {
+    this.sortBy = 'album';
+    this.sortSelect.value = 'album';
+    this.viewMode = 'album';
+    this.currentAlbum = albumName;
+    this.currentArtist = null;
+    this.searchQuery = '';
+    this.searchInput.value = '';
+    this.searchClear.style.display = 'none';
+    this.renderPlaylist();
+  }
+
+
+  showKeyboard() {
+    this.onscreenKeyboard.style.display = 'block';
+    this.searchInput.removeAttribute('readonly');
+    this.searchInput.focus();
+  }
+
+  hideKeyboard() {
+    this.onscreenKeyboard.style.display = 'none';
+    this.searchInput.setAttribute('readonly', 'true');
+    this.searchInput.blur();
+  }
+
+  handleKeyboardInput(key) {
+    const currentValue = this.searchInput.value;
+    this.searchInput.value = currentValue + key;
+    this.handleSearch(this.searchInput.value);
+  }
+
+  handleKeyboardBackspace() {
+    const currentValue = this.searchInput.value;
+    this.searchInput.value = currentValue.slice(0, -1);
+    this.handleSearch(this.searchInput.value);
   }
 }
 
@@ -1202,6 +1819,9 @@ let musicPlayer = null;
 function initMusicPlayer() {
   if (!musicPlayer) {
     musicPlayer = new MusicPlayer();
+  } else {
+    // Check if folder has been set since last time
+    musicPlayer.checkForNewFolder();
   }
   return musicPlayer;
 }
