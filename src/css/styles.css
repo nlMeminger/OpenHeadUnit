@@ -444,45 +444,56 @@ input[type="range"]::-webkit-slider-thumb {
 /* Radio Interface */
 .radio-interface {
     display: none;
-    padding: 40px;
-    max-width: 600px;
-    margin: 0 auto;
+    padding: 20px;
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    box-sizing: border-box;
+    flex-direction: row;
+    gap: 20px;
 }
 
 .radio-interface.active {
-    display: block;
+    display: flex;
+}
+
+.radio-tuner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
 }
 
 .frequency-display {
     text-align: center;
-    margin-bottom: 40px;
 }
 
 .frequency-number {
-    font-size: 72px;
+    font-size: clamp(48px, 10vw, 80px);
     font-weight: bold;
-    color: #00ff88;
-    letter-spacing: 8px;
-    text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+    color: #5cb;
+    letter-spacing: 6px;
+    text-shadow: 0 0 15px rgba(68, 170, 153, 0.3);
+    line-height: 1;
 }
 
 .frequency-label {
-    font-size: 18px;
+    font-size: clamp(12px, 2vw, 16px);
     color: #888;
-    margin-top: 10px;
+    margin-top: 8px;
     text-transform: uppercase;
     letter-spacing: 3px;
 }
 
 .radio-status {
-    font-size: 14px;
-    color: #00ff88;
-    margin-top: 10px;
+    font-size: clamp(11px, 1.5vw, 14px);
+    color: #5cb;
+    margin-top: 6px;
     opacity: 0.8;
 }
 
@@ -490,18 +501,17 @@ input[type="range"]::-webkit-slider-thumb {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 30px;
-    margin-bottom: 40px;
+    gap: clamp(12px, 3vw, 30px);
 }
 
 .tune-btn {
-    width: 60px;
-    height: 60px;
+    width: clamp(44px, 8vw, 60px);
+    height: clamp(44px, 8vw, 60px);
     border-radius: 50%;
     background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
     border: 2px solid #333;
     color: #fff;
-    font-size: 24px;
+    font-size: clamp(18px, 3vw, 24px);
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -510,75 +520,85 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .tune-btn:hover {
-    border-color: #00ff88;
-    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+    border-color: #4a9;
+    box-shadow: 0 0 15px rgba(68, 170, 153, 0.25);
 }
 
 .seek-btn {
-    width: 50px;
-    height: 50px;
+    width: clamp(36px, 6vw, 50px);
+    height: clamp(36px, 6vw, 50px);
     border-radius: 50%;
     background: #1a1a1a;
     border: 1px solid #333;
     color: #888;
-    font-size: 20px;
+    font-size: clamp(14px, 2.5vw, 20px);
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .seek-btn:hover {
-    border-color: #00ff88;
-    color: #00ff88;
+    border-color: #4a9;
+    color: #5cb;
 }
 
 .frequency-slider {
     width: 100%;
-    margin: 20px 0;
+    max-width: 400px;
+    padding: 0 10px;
+    box-sizing: border-box;
 }
 
 .frequency-slider input[type="range"] {
     width: 100%;
-    height: 6px;
+    height: 8px;
 }
 
 .presets {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    margin-top: 30px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 10px;
+    height: 100%;
+    width: clamp(180px, 30vw, 280px);
+    flex-shrink: 0;
 }
 
 .preset-btn {
     background: #1a1a1a;
     border: 1px solid #333;
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 10px;
     color: #888;
     cursor: pointer;
     transition: all 0.2s;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .preset-btn:hover {
-    border-color: #00ff88;
-    color: #fff;
+    border-color: #4a9;
+    color: #ccc;
 }
 
 .preset-btn.active {
-    background: #00ff88;
-    color: #000;
-    border-color: #00ff88;
-    font-weight: bold;
+    background: rgba(68, 170, 153, 0.15);
+    color: #5cb;
+    border-color: #4a9;
+    border-width: 2px;
 }
 
 .preset-number {
-    font-size: 12px;
+    font-size: clamp(10px, 1.5vw, 12px);
     opacity: 0.7;
 }
 
 .preset-freq {
-    font-size: 16px;
-    margin-top: 5px;
+    font-size: clamp(16px, 2.5vw, 22px);
+    margin-top: 4px;
+    font-weight: 500;
 }
 
 .nav-bar {
