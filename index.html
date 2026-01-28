@@ -4,11 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: blob:;">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; media-src 'self' blob:; img-src 'self' data: blob: file: https://*.tile.openstreetmap.org; connect-src 'self' http://localhost:5000 https://router.project-osrm.org https://*.tile.openstreetmap.org;">
     <title>Car Infotainment System</title>
     <link rel="stylesheet" href="src/css/styles.css">
+    <link rel="stylesheet" href="src/css/navigation.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <!-- jsmediatags for reading audio metadata -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 
 <body>
@@ -423,6 +428,66 @@
                         <div class="settings-status" id="settingsStatus"></div>
                     </div>
                 </div>
+
+                <!-- Navigation Interface -->
+                <div class="navigation-interface" id="navigationInterface">
+                    <button class="back-btn" id="navBackBtn">←</button>
+
+                    <!-- Navigation Header -->
+                    <div class="nav-header">
+                        <div class="nav-search-container">
+                            <input type="text" class="nav-search-input" id="navSearchInput" placeholder="Search destination..." readonly>
+                            <button class="nav-search-btn" id="navSearchBtn">🔍</button>
+                        </div>
+                        <div class="nav-header-controls">
+                            <button class="nav-header-btn" id="navCenterBtn" title="Center on location">📍</button>
+                            <button class="nav-header-btn" id="navLayersBtn" title="Map layers">🗺️</button>
+                        </div>
+                    </div>
+
+                    <!-- Map Container -->
+                    <div class="nav-map-container">
+                        <div id="navMap" class="nav-map"></div>
+
+                        <!-- Map Controls -->
+                        <div class="nav-map-controls">
+                            <button class="nav-zoom-btn" id="navZoomIn">+</button>
+                            <button class="nav-zoom-btn" id="navZoomOut">−</button>
+                        </div>
+
+                        <!-- GPS Status Indicator -->
+                        <div class="nav-gps-status" id="navGpsStatus">
+                            <span class="gps-icon">📡</span>
+                            <span class="gps-text" id="navGpsText">Searching...</span>
+                        </div>
+                    </div>
+
+                    <!-- Turn-by-Turn Panel (hidden when not navigating) -->
+                    <div class="nav-turn-panel" id="navTurnPanel" style="display: none;">
+                        <div class="nav-turn-info">
+                            <div class="nav-turn-icon" id="navTurnIcon">↑</div>
+                            <div class="nav-turn-details">
+                                <div class="nav-turn-instruction" id="navTurnInstruction">Continue straight</div>
+                                <div class="nav-turn-distance" id="navTurnDistance">--</div>
+                            </div>
+                        </div>
+                        <div class="nav-route-info">
+                            <div class="nav-info-item">
+                                <span class="nav-info-label">Distance</span>
+                                <span class="nav-info-value" id="navTotalDistance">--</span>
+                            </div>
+                            <div class="nav-info-item">
+                                <span class="nav-info-label">ETA</span>
+                                <span class="nav-info-value" id="navEta">--</span>
+                            </div>
+                            <div class="nav-info-item">
+                                <span class="nav-info-label">Speed</span>
+                                <span class="nav-info-value" id="navSpeed">-- mph</span>
+                            </div>
+                        </div>
+                        <button class="nav-stop-btn" id="navStopBtn">✕ End Route</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -440,6 +505,11 @@
 
     <!-- Music Player -->
     <script src="src/js/music-player.js"></script>
+
+    <!-- Navigation - GPS and Map -->
+    <script src="src/js/maps/map-controller.js"></script>
+    <script src="src/js/gps/mock-gps-provider.js"></script>
+    <script src="src/js/navigation-manager.js"></script>
 
     <!-- App Integration -->
     <script src="src/js/app-integration.js"></script>

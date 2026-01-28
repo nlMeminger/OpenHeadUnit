@@ -7,9 +7,11 @@ const homeScreen = document.getElementById('homeScreen');
 const radioInterface = document.getElementById('radioInterface');
 const carplayInterface = document.getElementById('carplayInterface');
 const settingsInterface = document.getElementById('settingsInterface');
+const navigationInterface = document.getElementById('navigationInterface');
 const appTiles = document.querySelectorAll('.app-tile');
 const backBtn = document.getElementById('backBtn');
 const settingsBackBtn = document.getElementById('settingsBackBtn');
+const navBackBtn = document.getElementById('navBackBtn');
 const navBtns = document.querySelectorAll('.nav-btn');
 const musicInterface = document.getElementById('musicInterface');
 
@@ -412,6 +414,7 @@ appTiles.forEach(tile => {
         carplayInterface.classList.remove('fullscreen');
         settingsInterface.classList.remove('active');
         musicInterface.classList.remove('active');
+        navigationInterface.classList.remove('active');
 
         // Hide keyboard and context menu when switching interfaces
         const keyboard = document.getElementById('onscreenKeyboard');
@@ -433,6 +436,10 @@ appTiles.forEach(tile => {
             console.log('Opening music interface');
             musicInterface.classList.add('active');
             initMusicPlayer();
+        } else if (app === 'navigation') {
+            console.log('Opening navigation interface');
+            navigationInterface.classList.add('active');
+            initNavigation();
         }
     });
 });
@@ -449,6 +456,17 @@ musicBackBtn.addEventListener('click', () => {
 
     musicInterface.classList.remove('active');
     homeScreen.style.display = 'grid';
+});
+
+// Navigation back button
+navBackBtn.addEventListener('click', () => {
+    console.log('Closing navigation interface');
+    navigationInterface.classList.remove('active');
+    homeScreen.style.display = 'grid';
+
+    // Update nav bar
+    navBtns.forEach(b => b.classList.remove('active'));
+    navBtns[0].classList.add('active'); // Activate home button
 });
 
 // Back buttons
@@ -499,6 +517,7 @@ navBtns.forEach((btn, index) => {
         carplayInterface.classList.remove('fullscreen');
         settingsInterface.classList.remove('active');
         musicInterface.classList.remove('active');
+        navigationInterface.classList.remove('active');
 
         // Hide keyboard and context menu when switching interfaces
         const keyboard = document.getElementById('onscreenKeyboard');
@@ -512,8 +531,8 @@ navBtns.forEach((btn, index) => {
                 homeScreen.style.display = 'grid';
                 break;
             case 1: // Navigation
-                homeScreen.style.display = 'grid';
-                // Could add navigation interface here
+                navigationInterface.classList.add('active');
+                initNavigation();
                 break;
             case 2: // Media/Radio
                 radioInterface.classList.add('active');

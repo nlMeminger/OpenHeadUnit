@@ -18,11 +18,15 @@
       "target": [
         {
           "target": "deb",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         },
         {
           "target": "AppImage",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "category": "Utility",
@@ -41,7 +45,12 @@
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
     "broadway": "^4.1.0",
-    "loudness": "^0.4.2"
+    "leaflet": "^1.9.4",
+    "loudness": "^0.4.2",
+    "nmea-simple": "^3.3.0",
+    "node-gpsd": "^0.3.4",
+    "serialport": "^13.0.0"
   }
 }

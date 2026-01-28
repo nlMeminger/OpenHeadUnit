@@ -82,6 +82,20 @@ class SettingsManager {
       },
       music: {
         folderPath: null
+      },
+      navigation: {
+        gpsSource: 'mock',           // mock | gpsd | serial
+        serialPort: '/dev/ttyUSB0',
+        serialBaudRate: 9600,
+        osrmMode: 'online',          // local | online
+        osrmServerUrl: 'http://localhost:5000',
+        voiceEnabled: true,
+        voiceVolume: 80,
+        voiceLang: 'en-US',
+        mapStyle: 'dark',            // dark | light
+        orientation: 'heading',      // heading | north
+        autoFollow: true,
+        tilesPath: null              // Path to offline tiles
       }
     };
   }
